@@ -85,7 +85,9 @@
 (defn structured-request->event
   "Get cloud event from request in structured format."
   [{:keys [headers body]}]
-  (throw (UnsupportedOperationException. "Structured request is not supported at the time.")))
+  (throw (#?(:clj UnsupportedOperationException.
+             :cljs js/Error. )
+           "Structured response is not supported at the time.")))
 
 (defn request->event
   [req]
@@ -113,4 +115,6 @@
 (defn event->binary-request
   "Creates http response for event in structured format."
   [event]
-  (throw (UnsupportedOperationException. "Structured response is not supported at the time.")))
+  (throw (#?(:clj UnsupportedOperationException.
+             :cljs js/Error. )
+           "Structured response is not supported at the time.")))
