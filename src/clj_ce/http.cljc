@@ -112,7 +112,7 @@
     {:headers headers
      :body    (:ce/data event)}))
 
-(defn event->binary-request
+(defn event->structured-request
   "Creates http response for event in structured format."
   [event]
   (throw (#?(:clj UnsupportedOperationException.
