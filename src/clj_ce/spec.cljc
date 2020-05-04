@@ -1,6 +1,19 @@
 (ns clj-ce.spec
   (:require [clojure.spec.alpha :as s]))
 
+(s/def :ce/data-schema uri?)
+(s/def :ce/time inst?)
+(s/def :ce/data-content-type string?)
+(s/def :ce/schema-url uri?)
+(s/def :ce/data-content-encoding string?)
+(s/def :ce/type string?)
+(s/def :ce/source uri?)
+(s/def :ce/id string?)
+(s/def :ce/extensions map?)
+(s/def :ce/spec-version #{"0.3" "1.0"})
+(s/def :ce/subject string?)
+(s/def :ce/data any?)
+
 (defmulti event-version :ce/spec-version)
 (defmethod event-version "0.3" [_]
   (s/keys :req [:ce/id :ce/spec-version :ce/source :ce/type]

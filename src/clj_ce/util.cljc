@@ -3,7 +3,7 @@
 
 #?(:cljs (defn parse-uri
            [s]
-           s))
+           (js/goog.Uri.parse s)))
 
 #?(:clj (defn parse-uri
           [s]

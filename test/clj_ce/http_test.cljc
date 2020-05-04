@@ -3,6 +3,13 @@
             [clj-ce.http :refer [binary-http->event event->binary-http]]
             [clj-ce.util :refer [parse-uri]]))
 
+#?(:cljs
+   (extend-protocol IEquiv
+     js/goog.Uri
+     (-equiv [o other]
+       (= (.toString o)
+          (.toString other)))))
+
 (def test-data-for-binary-format
   [{
     :headers {
