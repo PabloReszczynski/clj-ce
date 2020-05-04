@@ -1,6 +1,9 @@
 (ns clj-ce.http
   (:require [clojure.string :as clj-str]
-            [clojure.set :refer [map-invert]]))
+            [clojure.set :refer [map-invert]]
+            [clj-ce.util :refer [parse-uri]]
+            #?(:clj  [clojure.instant :as inst]))
+  #?(:clj (:import (java.text SimpleDateFormat))))
 
 (def ^:private required #{:ce/spec-version
                           :ce/id
@@ -37,6 +40,28 @@
 
 (def ^:private http-header->ce-field-ce-v1 (map-invert ce-v1-field->http-header))
 
+(defn ^:private parse-time
+  [s]
+  #?(:clj  (inst/read-instant-date s)
+     :cljs (js/Date. s)))
+
+(def ^:private field->parse-fn
+  {:ce/time        parse-time
+   :ce/source      parse-uri
+   :ce/data-schema parse-uri
+   :ce/schema-url  parse-uri})
+
+(defn ^:private ser-time
+  [t]
+  #?(:clj  (.format (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") t)
+     :cljs (.toISOString t)))
+
+(def ^:private field->ser-fn
+  {:ce/time        ser-time
+   :ce/source      str
+   :ce/data-schema str
+   :ce/schema-url  str})
+
 (defn ^:private header->field-by-version
   [version]
   (case version
@@ -70,31 +95,39 @@
 (defn binary-request->event
   "Get cloud event from request in binary format."
   [{:keys [headers body]}]
-  (let [version (headers "ce-specversion")
+  (let [headers (->> headers
+                     (map (fn [[k v]]
+                            [(.toLowerCase ^String k) v]))
+                     (into headers))
+        version (headers "ce-specversion")
         header->field (header->field-by-version version)
-        ce-headers (filter (fn [[header-key]] (and (> (count header-key) 3)
-                                                   (clj-str/starts-with? header-key "ce-")))
-                           headers)
         rf (fn [event [header-key header-value]]
              (if (contains? header->field header-key)
-               (assoc event (header->field header-key) header-value)
-               (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)))
-        event (reduce rf {} ce-headers)]
-    (assoc event :ce/data body)))
+               (let [field (header->field header-key)
+                     parse-fn (field->parse-fn field identity)]
+                 (assoc event field (parse-fn header-value)))
+               (if (and (> (count header-key) 3)
+                        (clj-str/starts-with? header-key "ce-"))
+                 (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
+                 event)))
+        event (reduce rf {} headers)]
+    (if body
+      (assoc event :ce/data body)
+      event)))
 
 (defn structured-request->event
   "Get cloud event from request in structured format."
   [{:keys [headers body]}]
-  (throw (#?(:clj UnsupportedOperationException.
-             :cljs js/Error. )
+  (throw (#?(:clj  UnsupportedOperationException.
+             :cljs js/Error.)
            "Structured response is not supported at the time.")))
 
 (defn request->event
   [req]
   (cond
-    (binary-request? req)     (binary-request->event req)
+    (binary-request? req) (binary-request->event req)
     (structured-request? req) (structured-request->event req)
-    :else                     nil))
+    :else nil))
 
 
 (defn event->binary-request
@@ -105,7 +138,9 @@
                      (map (fn [[k v]] [(str "ce-" (name k)) v]))
                      (into {}))
         headers (->> (dissoc event :ce/extensions)
-                     (map (fn [[k v]] [(field->header k) v]))
+                     (map (fn [[k v]]
+                            (let [ser-fn (field->ser-fn k identity)]
+                              [(field->header k) (ser-fn v)])))
                      (filter (fn [[k]] k))
                      (into headers))]
 
@@ -115,6 +150,6 @@
 (defn event->structured-request
   "Creates http response for event in structured format."
   [event]
-  (throw (#?(:clj UnsupportedOperationException.
-             :cljs js/Error. )
+  (throw (#?(:clj  UnsupportedOperationException.
+             :cljs js/Error.)
            "Structured response is not supported at the time.")))
