@@ -76,24 +76,24 @@
     "1.0" ce-v1-field->http-header
     nil))
 
-(defn ^:private structured-request?
+(defn ^:private structured-http?
   [req]
   (-> req
       (:headers)
       (get "content-type" "")
       (clj-str/starts-with? "application/cloudevents+")))
 
-(defn ^:private binary-request?
+(defn ^:private binary-http?
   [req]
   (contains? (:headers req) "ce-id"))
 
-(defn ^:private ce-request?
+(defn ^:private ce-http?
   [req]
-  (or (structured-request? req)
-      (binary-request? req)))
+  (or (structured-http? req)
+      (binary-http? req)))
 
-(defn binary-request->event
-  "Get cloud event from request in binary format."
+(defn binary-http->event
+  "Get cloud event from request/response in binary format."
   [{:keys [headers body]}]
   (let [headers (->> headers
                      (map (fn [[k v]]
@@ -115,23 +115,23 @@
       (assoc event :ce/data body)
       event)))
 
-(defn structured-request->event
-  "Get cloud event from request in structured format."
+(defn structured-http->event
+  "Get cloud event from request/response in structured format."
   [{:keys [headers body]}]
   (throw (#?(:clj  UnsupportedOperationException.
              :cljs js/Error.)
-           "Structured response is not supported at the time.")))
+           "Structured messages is not supported at the time.")))
 
-(defn request->event
+(defn http->event
   [req]
   (cond
-    (binary-request? req) (binary-request->event req)
-    (structured-request? req) (structured-request->event req)
+    (binary-http? req) (binary-http->event req)
+    (structured-http? req) (structured-http->event req)
     :else nil))
 
 
-(defn event->binary-request
-  "Creates http response for event in binary format."
+(defn event->binary-http
+  "Creates http request/response for event in binary format."
   [event]
   (let [field->header (field->header-by-version (:ce/spec-version event))
         headers (->> (:ce/extensions event)
@@ -147,9 +147,9 @@
     {:headers headers
      :body    (:ce/data event)}))
 
-(defn event->structured-request
-  "Creates http response for event in structured format."
+(defn event->structured-http
+  "Creates http request/response for event in structured format."
   [event]
   (throw (#?(:clj  UnsupportedOperationException.
              :cljs js/Error.)
-           "Structured response is not supported at the time.")))
+           "Structured messages is not supported at the time.")))

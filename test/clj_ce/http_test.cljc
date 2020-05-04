@@ -1,6 +1,6 @@
 (ns clj-ce.http-test
   (:require [clojure.test :refer [is deftest]]
-            [clj-ce.http :refer [binary-request->event event->binary-request]]
+            [clj-ce.http :refer [binary-http->event event->binary-http]]
             [clj-ce.util :refer [parse-uri]]))
 
 (def test-data-for-binary-format
@@ -257,12 +257,12 @@
 (deftest binary-http->event-test
   (doseq [arguments test-data-for-binary-format]
     (let [{:keys [headers body event]} arguments
-          e (binary-request->event {:headers headers :body body})]
+          e (binary-http->event {:headers headers :body body})]
       (is (= event e)))))
 
 (deftest event->binary-http&back-test
   (doseq [arguments test-data-for-binary-format]
     (let [{:keys [event]} arguments]
       (is (= event (-> event
-                       (event->binary-request)
-                       (binary-request->event)))))))
+                       (event->binary-http)
+                       (binary-http->event)))))))
