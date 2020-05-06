@@ -57,19 +57,30 @@
        :data-schema ser-uri
        :schema-url  ser-uri})
 
-(defn ^:private header->field-by-version
-  [version]
-  (case version
-    "0.3" header->field-v03
-    "1.0" header->field-v1
-    nil))
+(def ^:private header->field-by-version
+  {"0.3" header->field-v03
+   "1.0" header->field-v1})
 
-(defn ^:private field->header-by-version
+(def ^:private field->header-by-version
+  {"0.3" field->header-v03
+   "1.0" field->header-v1})
+
+
+(defn ^:private header->field&deser-fn-by-version
   [version]
-  (case version
-    "0.3" field->header-v03
-    "1.0" field->header-v1
-    nil))
+  (fn [header]
+    (if-let [header->field (header->field-by-version version)]
+      (if (header->field header)
+        [(header->field header)
+         (field->deser-fn (header->field header) identity)]))))
+
+(defn ^:private field->header&ser-fn-by-version
+  [version]
+  (fn [field]
+    (if-let [field->header (field->header-by-version version)]
+      (if (field->header field)
+        [(field->header field)
+         (field->ser-fn field identity)]))))
 
 (defn ^:private structured-http?
   [req]
@@ -95,11 +106,10 @@
                             [(.toLowerCase ^String k) v]))
                      (into headers))
         version (headers "ce-specversion")
-        header->field (header->field-by-version version)
+        header->field&deser-fn (header->field&deser-fn-by-version version)
         rf (fn [event [header-key header-value]]
-             (if (contains? header->field header-key)
-               (let [field (header->field header-key)
-                     deser-fn (field->deser-fn field identity)]
+             (if (header->field&deser-fn header-key)
+               (let [[field deser-fn] (header->field&deser-fn header-key)]
                  (assoc event field (deser-fn header-value)))
                (if (and (> (count header-key) 3)
                         (starts-with? header-key "ce-"))
@@ -128,15 +138,14 @@
 (defn event->binary-http
   "Creates http request/response for event in binary format."
   [event]
-  (let [field->header (field->header-by-version (:ce/spec-version event))
+  (let [field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
         headers (->> (:ce/extensions event)
                      (map (fn [[k v]] [(str "ce-" (name k)) v]))
                      (into {}))
         headers (->> (dissoc event :ce/extensions)
-                     (map (fn [[k v]]
-                            (let [ser-fn (field->ser-fn k identity)]
-                              [(field->header k) (ser-fn v)])))
-                     (filter (fn [[k]] k))
+                     (keep (fn [[field-key field-value]]
+                             (if-let [[header-key ser-fn] (field->header&ser-fn field-key)]
+                               [header-key (ser-fn field-value)])))
                      (into headers))]
 
     {:headers headers
