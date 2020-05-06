@@ -1,5 +1,8 @@
 # clj-ce
 
+![Clojure CI](https://github.com/matejvasek/clj-ce/workflows/Clojure%20CI/badge.svg)
+![ClojureScript CI](https://github.com/matejvasek/clj-ce/workflows/CI/badge.svg)
+
 Clojure(Script) library designed to handle CloudEvents.
 
 ## Usage
