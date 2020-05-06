@@ -2,20 +2,20 @@
   (:require [clj-ce.util :refer [parse-uri]]
             [clojure.string :refer [starts-with?]]
             [clojure.set :refer [map-invert]]
-            #?(:clj [clojure.instant :as inst]))
-  #?(:clj (:import (java.text SimpleDateFormat))))
+            #?(:clj [clojure.instant :refer [read-instant-date]]))
+  #?(:clj (:import (java.time Instant))))
 
 
 
 (defn ^:private deser-time
   [s]
-  #?(:clj  (inst/read-instant-date s)
+  #?(:clj  (read-instant-date s)
      :cljs (js/Date. s)))
 
 (defn ^:private ser-time
-  [t]
-  #?(:clj  (.format (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") t)
-     :cljs (.toISOString t)))
+  [inst]
+  #?(:clj  (.toString ^Instant (Instant/ofEpochMilli (inst-ms inst)))
+     :cljs (.toISOString (js/Date. (inst-ms inst)))))
 
 (def ^:private ser-uri str)
 
