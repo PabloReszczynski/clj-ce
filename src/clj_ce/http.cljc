@@ -1,79 +1,74 @@
 (ns clj-ce.http
-  (:require [clojure.string :as clj-str]
+  (:require [clj-ce.util :refer [parse-uri]]
+            [clojure.string :refer [starts-with?]]
             [clojure.set :refer [map-invert]]
-            [clj-ce.util :refer [parse-uri]]
-            #?(:clj  [clojure.instant :as inst]))
+            #?(:clj [clojure.instant :as inst]))
   #?(:clj (:import (java.text SimpleDateFormat))))
 
-(def ^:private required #{:ce/spec-version
-                          :ce/id
-                          :ce/type
-                          :ce/source})
 
-(def ^:private optional-v03 #{:ce/data-content-type
-                              :ce/data-content-encoding
-                              :ce/schema-url
-                              :ce/subject
-                              :ce/time})
 
-(def ^:private optional-v1 #{:ce/data-content-type
-                             :ce/data-schema
-                             :ce/subject
-                             :ce/time})
-
-(defn ^:private kw->map-entry [kw]
-  [kw (str "ce-" (clj-str/replace (name kw) "-" ""))])
-
-(def ^:private ce-v03-field->http-header
-  (as-> (clojure.set/union required optional-v03) data
-        (map kw->map-entry data)
-        (into {} data)
-        (assoc data :ce/data-content-type "content-type")))
-
-(def ^:private http-header->ce-field-ce-v03 (map-invert ce-v03-field->http-header))
-
-(def ^:private ce-v1-field->http-header
-  (as-> (clojure.set/union required optional-v1) data
-        (map kw->map-entry data)
-        (into {} data)
-        (assoc data :ce/data-content-type "content-type")))
-
-(def ^:private http-header->ce-field-ce-v1 (map-invert ce-v1-field->http-header))
-
-(defn ^:private parse-time
+(defn ^:private deser-time
   [s]
   #?(:clj  (inst/read-instant-date s)
      :cljs (js/Date. s)))
-
-(def ^:private field->parse-fn
-  {:ce/time        parse-time
-   :ce/source      parse-uri
-   :ce/data-schema parse-uri
-   :ce/schema-url  parse-uri})
 
 (defn ^:private ser-time
   [t]
   #?(:clj  (.format (SimpleDateFormat. "yyyy-MM-dd'T'HH:mm:ssXXX") t)
      :cljs (.toISOString t)))
 
+(def ^:private ser-uri str)
+
+(def ^:private deser-uri parse-uri)
+
+(def ^:private field->header-common
+  #:ce{:id                "ce-id"
+       :spec-version      "ce-specversion"
+       :source            "ce-source"
+       :type              "ce-type"
+       :subject           "ce-subject"
+       :data-content-type "content-type"
+       :time              "ce-time"})
+
+(def ^:private field->header-v1
+  (merge field->header-common
+         #:ce{:data-schema "ce-dataschema"}))
+
+(def ^:private field->header-v03
+  (merge field->header-common
+         #:ce{:schema-url            "ce-schemaurl"
+              :data-content-encoding "ce-datacontentencoding"}))
+
+(def ^:private header->field-v1
+  (map-invert field->header-v1))
+
+(def ^:private header->field-v03
+  (map-invert field->header-v03))
+
+(def ^:private field->deser-fn
+  #:ce{:time        deser-time
+       :source      deser-uri
+       :data-schema deser-uri
+       :schema-url  deser-uri})
+
 (def ^:private field->ser-fn
-  {:ce/time        ser-time
-   :ce/source      str
-   :ce/data-schema str
-   :ce/schema-url  str})
+  #:ce{:time        ser-time
+       :source      ser-uri
+       :data-schema ser-uri
+       :schema-url  ser-uri})
 
 (defn ^:private header->field-by-version
   [version]
   (case version
-    "0.3" http-header->ce-field-ce-v03
-    "1.0" http-header->ce-field-ce-v1
+    "0.3" header->field-v03
+    "1.0" header->field-v1
     nil))
 
 (defn ^:private field->header-by-version
   [version]
   (case version
-    "0.3" ce-v03-field->http-header
-    "1.0" ce-v1-field->http-header
+    "0.3" field->header-v03
+    "1.0" field->header-v1
     nil))
 
 (defn ^:private structured-http?
@@ -81,7 +76,7 @@
   (-> req
       (:headers)
       (get "content-type" "")
-      (clj-str/starts-with? "application/cloudevents+")))
+      (starts-with? "application/cloudevents+")))
 
 (defn ^:private binary-http?
   [req]
@@ -104,10 +99,10 @@
         rf (fn [event [header-key header-value]]
              (if (contains? header->field header-key)
                (let [field (header->field header-key)
-                     parse-fn (field->parse-fn field identity)]
-                 (assoc event field (parse-fn header-value)))
+                     deser-fn (field->deser-fn field identity)]
+                 (assoc event field (deser-fn header-value)))
                (if (and (> (count header-key) 3)
-                        (clj-str/starts-with? header-key "ce-"))
+                        (starts-with? header-key "ce-"))
                  (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
                  event)))
         event (reduce rf {} headers)]
