@@ -105,13 +105,19 @@
         version (headers "ce-specversion")
         header->field&deser-fn (header->field&deser-fn-by-version version)
         rf (fn [event [header-key header-value]]
-             (if (header->field&deser-fn header-key)
+             (cond
+               ;; ce field
+               (header->field&deser-fn header-key)
                (let [[field deser-fn] (header->field&deser-fn header-key)]
                  (assoc event field (deser-fn header-value)))
-               (if (and (> (count header-key) 3)
-                        (starts-with? header-key "ce-"))
-                 (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
-                 event)))
+
+               ;; ce extension field
+               (and (starts-with? header-key "ce-") (> (count header-key) 3))
+               (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
+
+               ;; non ce header
+               :else
+               event))
         event (reduce rf {} headers)]
     (if body
       (assoc event :ce/data body)
