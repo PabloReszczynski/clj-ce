@@ -5,8 +5,6 @@
             #?(:clj [clojure.instant :refer [read-instant-date]]))
   #?(:clj (:import (java.time Instant))))
 
-
-
 (defn ^:private deser-time
   [s]
   #?(:clj  (read-instant-date s)
@@ -64,7 +62,6 @@
 (def ^:private field->header-by-version
   {"0.3" field->header-v03
    "1.0" field->header-v1})
-
 
 (defn ^:private header->field&deser-fn-by-version
   [version]
@@ -125,7 +122,7 @@
   [{:keys [headers body]}]
   (throw (#?(:clj  UnsupportedOperationException.
              :cljs js/Error.)
-           "Structured messages is not supported at the time.")))
+          "Structured messages is not supported at the time.")))
 
 (defn http->event
   [req]
@@ -133,7 +130,6 @@
     (binary-http? req) (binary-http->event req)
     (structured-http? req) (structured-http->event req)
     :else nil))
-
 
 (defn event->binary-http
   "Creates http request/response for event in binary format."
@@ -156,4 +152,4 @@
   [event]
   (throw (#?(:clj  UnsupportedOperationException.
              :cljs js/Error.)
-           "Structured messages is not supported at the time.")))
+          "Structured messages is not supported at the time.")))

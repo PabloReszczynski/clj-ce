@@ -7,7 +7,8 @@
                  [org.clojure/clojurescript "1.10.753"]]
   :global-vars {*warn-on-reflection* true}
   :repl-options {:init-ns clj-ce.core}
-  :plugins [[lein-cljsbuild "1.1.7"]]
+  :plugins [[lein-cljsbuild "1.1.7"]
+            [lein-cljfmt "0.6.7"]]
   :cljsbuild {:builds
               [{:id "test"
                 :source-paths ["src" "test"]

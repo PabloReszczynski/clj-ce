@@ -22,5 +22,4 @@
   (s/keys :req [:ce/id :ce/spec-version :ce/source :ce/type]
           :opt [:ce/data-content-type :ce/data-schema :ce/subject :ce/time :ce/data :ce/extensions]))
 
-
 (s/def :ce/event (s/multi-spec event-version :ce/spec-version))

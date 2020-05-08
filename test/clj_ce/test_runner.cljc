@@ -12,6 +12,6 @@
 
 #?(:cljs
    (t/run-tests
-     'clj-ce.util
-     'clj-ce.http-test
-     'clj-ce.core-test))
+    'clj-ce.util
+    'clj-ce.http-test
+    'clj-ce.core-test))
