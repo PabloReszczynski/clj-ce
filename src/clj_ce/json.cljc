@@ -48,10 +48,9 @@
   [js-field-value _]
   (util/deser-time js-field-value))
 
-
 (defn atob
   [s]
-  #?(:clj (String. (.decode (Base64/getDecoder) ^String s) "UTF-8")
+  #?(:clj  (String. (.decode (Base64/getDecoder) ^String s) "UTF-8")
      :cljs (.decode (js/TextDecoder. "utf-8") (b64/decodeStringToUint8Array s))))
 
 (defn- deser-data
@@ -100,24 +99,46 @@
 #?(:clj
    (extend-protocol Data
      (Class/forName "[B")
-     (->character-source [data charset] (InputStreamReader. (ByteArrayInputStream. data) ^String charset))
+     (->character-source
+       [data charset]
+       (InputStreamReader. (ByteArrayInputStream. data) ^String charset))
+
      String
-     (->character-source [data _] (StringReader. data))
+     (->character-source
+       [data _]
+       (StringReader. data))
+
      InputStream
-     (->character-source [data charset] (InputStreamReader. ^InputStream data ^String charset))
+     (->character-source
+       [data charset]
+       (InputStreamReader. ^InputStream data ^String charset))
+
      nil
-     (->character-source [_ _] (StringReader. ""))))
+     (->character-source
+       [_ _]
+       (StringReader. ""))))
 
 #?(:cljs
    (extend-protocol Data
      string
-     (->character-source [data _] data)
+     (->character-source
+       [data _]
+       data)
+
      js/Uint8Array
-     (->character-source [data charset] (.decode (js/TextDecoder. charset) data))
+     (->character-source
+       [data charset]
+       (.decode (js/TextDecoder. charset) data))
+
      js/ArrayBuffer
-     (->character-source [data charset] (.decode (js/TextDecoder. charset) (js/Uint8Array. data)))
+     (->character-source
+       [data charset]
+       (.decode (js/TextDecoder. charset) (js/Uint8Array. data)))
+
      nil
-     (->character-source [_ _] "")))
+     (->character-source
+       [_ _]
+       "")))
 
 #?(:cljs
    (when (resolve 'js.Buffer)
@@ -125,18 +146,16 @@
        js/Buffer
        (->character-source [data charset] (.toString data charset)))))
 
-
 (defn- data->characters
   "Abstract various sources of data e.g. byte array or input stream.
   For Clojure returns java.io.Reader for ClojureScript returns string."
   [data & [charset]]
   (->character-source data charset))
 
-
 (defn- data->obj
   "Transforms data to a map representing JS object."
   [data & [charset]]
-  #?(:clj (json/read (PushbackReader. (data->characters data charset)))
+  #?(:clj  (json/read (PushbackReader. (data->characters data charset)))
      :cljs (js->clj (js/JSON.parse (data->characters data charset)))))
 
 (defn deserialize
