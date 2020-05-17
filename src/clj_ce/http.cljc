@@ -122,8 +122,9 @@
 
 (defn binary-msg->event
   "Creates CloudEvent from http message in binary format."
-  [{:keys [headers body]}]
-  (let [headers (->> headers
+  [http-msg]
+  (let [{:keys [headers body]} http-msg
+        headers (->> headers
                      (map (fn [[k v]]
                             [(lower-case k) v]))
                      (into headers))
