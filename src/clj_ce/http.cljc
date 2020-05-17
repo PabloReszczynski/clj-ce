@@ -30,7 +30,7 @@
         (assoc :status 200)))"
 
   (:require [clj-ce.util :refer [parse-uri ser-time deser-time]]
-            [clojure.string :refer [starts-with? index-of trim split]]
+            [clojure.string :refer [starts-with? index-of trim split lower-case]]
             [clojure.set :refer [map-invert]])
   #?(:clj (:import (java.time Instant))))
 
@@ -125,7 +125,7 @@
   [{:keys [headers body]}]
   (let [headers (->> headers
                      (map (fn [[k v]]
-                            [(.toLowerCase ^String k) v]))
+                            [(lower-case k) v]))
                      (into headers))
         version (headers "ce-specversion")
         header->field&deser-fn (header->field&deser-fn-by-version version)
