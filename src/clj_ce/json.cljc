@@ -210,4 +210,4 @@
                         (into {}))]
     (#?(:clj  #(write-json % charset)
         :cljs #(js/JSON.stringify (clj->js %)))
-      (merge fields extensions))))
+     (merge fields extensions))))
