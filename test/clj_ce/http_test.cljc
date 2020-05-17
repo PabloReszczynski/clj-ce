@@ -32,8 +32,8 @@
   (doseq [arguments struct-data/data]
     (let [{:keys [event]} arguments]
       (is (= event (-> event
-                       (event->structured-http "json" j/serialize "utf-8")
-                       (structured-http->event {"json" j/deserialize})))))))
+                       (event->structured-http "json" j/cloudevent->json "utf-8")
+                       (structured-http->event {"json" j/json->cloudevent})))))))
 
 #?(:clj
    (do (deftest structured-http->event-test-utf8
@@ -42,7 +42,7 @@
                  body (.getBytes ^String body "UTF-8")
                  headers (update headers "content-type" #(str % "; charset=utf-8"))
                  e (structured-http->event {:headers headers :body body}
-                                           {"json" j/deserialize})]
+                                           {"json" j/json->cloudevent})]
              (is (= event e)))))
 
        (deftest structured-http->event-test-iso-8859-2
@@ -51,7 +51,7 @@
                  body (.getBytes ^String body "ISO-8859-2")
                  headers (update headers "content-type" #(str % "; charset=iso-8859-2"))
                  e (structured-http->event {:headers headers :body body}
-                                           {"json" j/deserialize})]
+                                           {"json" j/json->cloudevent})]
              (is (= event e))))))
 
    :cljs
@@ -60,7 +60,7 @@
            (let [{:keys [headers body event]} arguments
                  headers (update headers "content-type" #(str % "; charset=utf-8"))
                  e (structured-http->event {:headers headers :body body}
-                                           {"json" j/deserialize})]
+                                           {"json" j/json->cloudevent})]
              (is (= event e)))))
 
        (deftest structured-http->event-test-utf8-Uint8Array
@@ -69,7 +69,7 @@
                  body (.encode (js/TextEncoder. "utf-8") body)
                  headers (update headers "content-type" #(str % "; charset=utf-8"))
                  e (structured-http->event {:headers headers :body body}
-                                           {"json" j/deserialize})]
+                                           {"json" j/json->cloudevent})]
              (is (= event e)))))
 
        (deftest structured-http->event-test-utf8-ArrayBuffer
@@ -78,7 +78,7 @@
                  body (.-buffer (.encode (js/TextEncoder. "utf-8") body))
                  headers (update headers "content-type" #(str % "; charset=utf-8"))
                  e (structured-http->event {:headers headers :body body}
-                                           {"json" j/deserialize})]
+                                           {"json" j/json->cloudevent})]
              (is (= event e)))))
 
        (when (resolve 'js/Buffer)
@@ -88,5 +88,5 @@
                    body (js/Buffer.from body "utf8")
                    headers (update headers "content-type" #(str % "; charset=utf-8"))
                    e (structured-http->event {:headers headers :body body}
-                                             {"json" j/deserialize})]
+                                             {"json" j/json->cloudevent})]
                (is (= event e))))))))

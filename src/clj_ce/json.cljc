@@ -1,4 +1,6 @@
 (ns clj-ce.json
+  "This namespace contains functions for (de)serializing CloudEvents from/to JSON.
+  It's mainly intended for handling http messages in structured mode with JSON."
   (:require [clj-ce.util :as util]
             [clojure.set :refer [map-invert]]
             #?(:clj [clojure.data.json :as json])
@@ -168,8 +170,8 @@
   #?(:clj  (json/read (PushbackReader. (data->characters data charset)))
      :cljs (js->clj (js/JSON.parse (data->characters data charset)))))
 
-(defn deserialize
-  "Converts data containing a JSON to cloud event."
+(defn json->cloudevent
+  "Converts JSON to CloudEvent."
   [data & [charset]]
   {:pre [(satisfies? Data data) (or (nil? charset) (string? charset))]}
   (let [js-obj (data->obj data charset)
@@ -191,8 +193,8 @@
          (json/write m writer))
        (.toByteArray bos))))
 
-(defn serialize
-  "Converts cloud event to data containing JSON."
+(defn cloudevent->json
+  "Converts CloudEvent to JSON."
   [event & options]
   (let [{:keys [charset]
          :or   {charset "utf-8"}} options
