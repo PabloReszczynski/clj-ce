@@ -1,4 +1,34 @@
 (ns clj-ce.http
+  "This namespace contains functions for reading/writing
+  CloudEvents from/to http messages.
+
+  Http message in this context is a map with :headers and :body keys.
+  (not unlikely ring request/response).
+  The http message can be then used as http request or response.
+
+  CloudEvent is here represented by a map
+  where keys are namespaced keywords :ce/*.
+
+  For instance #:ce{:id \"42\",
+                    :spec-version \"1.0\",
+                    :type \"my.type\",
+                    :source \"http://example.com/\"}
+
+  Examples:
+
+  (clj-http.client/post \"http://localhost/\"
+                        (event->binary-http #:ce{:id \"42\"
+                                                 :spec-version \"1.0\"
+                                                 :type \"my.type\"
+                                                 :source \"http://example.com/\"}))
+
+  (defn ring-echo-handler
+    [req]
+    (-> req
+        (binary-http->event)
+        (event->binary-http)
+        (assoc :status 200)))"
+
   (:require [clj-ce.util :refer [parse-uri ser-time deser-time]]
             [clojure.string :refer [starts-with? index-of trim split]]
             [clojure.set :refer [map-invert]])
@@ -32,27 +62,20 @@
 (def ^:private header->field-v03
   (map-invert field->header-v03))
 
+(def ^:private header->field-by-version
+  {"0.3" header->field-v03
+   "1.0" header->field-v1})
+
 (def ^:private field->deser-fn
   #:ce{:time        deser-time
        :source      deser-uri
        :data-schema deser-uri
        :schema-url  deser-uri})
 
-(def ^:private field->ser-fn
-  #:ce{:time        ser-time
-       :source      ser-uri
-       :data-schema ser-uri
-       :schema-url  ser-uri})
-
-(def ^:private header->field-by-version
-  {"0.3" header->field-v03
-   "1.0" header->field-v1})
-
-(def ^:private field->header-by-version
-  {"0.3" field->header-v03
-   "1.0" field->header-v1})
-
-(defn ^:private header->field&deser-fn-by-version
+(defn- header->field&deser-fn-by-version
+  "Returns a function that maps http header to a pair [field, deser-fn],
+  where `field` is a field of CloudEvent (keyword) to which the http header is mapped to and
+  `deser-fn` is a function used to deserialize the header to the field."
   [version]
   (fn [header]
     (if-let [header->field (header->field-by-version version)]
@@ -60,7 +83,20 @@
         [(header->field header)
          (field->deser-fn (header->field header) identity)]))))
 
-(defn ^:private field->header&ser-fn-by-version
+(def ^:private field->header-by-version
+  {"0.3" field->header-v03
+   "1.0" field->header-v1})
+
+(def ^:private field->ser-fn
+  #:ce{:time        ser-time
+       :source      ser-uri
+       :data-schema ser-uri
+       :schema-url  ser-uri})
+
+(defn- field->header&ser-fn-by-version
+  "Returns a function that maps CloudEvent field to pair [header, ser-fn],
+  where `header` is a name of a header to which the filed (keyword) is mapped to and
+  `ser-fn` is a function used to serialize the field to the header."
   [version]
   (fn [field]
     (if-let [field->header (field->header-by-version version)]
@@ -68,24 +104,24 @@
         [(field->header field)
          (field->ser-fn field identity)]))))
 
-(defn ^:private structured-http?
-  [req]
-  (-> req
+(defn- structured-http?
+  [http-msg]
+  (-> http-msg
       (:headers)
       (get "content-type" "")
       (starts-with? "application/cloudevents+")))
 
-(defn ^:private binary-http?
-  [req]
-  (contains? (:headers req) "ce-id"))
+(defn- binary-http?
+  [http-msg]
+  (contains? (:headers http-msg) "ce-id"))
 
-(defn ^:private ce-http?
-  [req]
-  (or (structured-http? req)
-      (binary-http? req)))
+(defn- ce-http?
+  [http-msg]
+  (or (structured-http? http-msg)
+      (binary-http? http-msg)))
 
 (defn binary-http->event
-  "Get cloud event from request/response in binary format."
+  "Creates CloudEvent from http message in binary format."
   [{:keys [headers body]}]
   (let [headers (->> headers
                      (map (fn [[k v]]
@@ -113,7 +149,7 @@
       event)))
 
 (defn event->binary-http
-  "Creates http request/response for event in binary format."
+  "Creates http message in binary mode from an event."
   [event]
   (let [field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
         headers (->> (:ce/extensions event)
@@ -128,7 +164,12 @@
     {:headers headers
      :body    (:ce/data event)}))
 
-(defn ^:private parse-content-type
+(defn- parse-content-type
+  "Returns format and charset of CloudEvent
+  from content-type header of http message in structured mode.
+
+  For instance for \"application/cloudevents+json; charset=utf-8\"
+  returns [\"json\", \"utf-8\"]."
   [content-type]
   (let [[format-part charset-part] (split content-type #";")
         format-start (some-> (index-of format-part "+") inc)
@@ -143,7 +184,7 @@
       ["application/octet-stream" nil])))
 
 (defn structured-http->event
-  "Get cloud event from http message in structured mode."
+  "Creates CloudEvent from http message in structured mode."
   [http-msg deserializers]
   (let [{:keys [headers body]} http-msg
         [format encoding] (parse-content-type (headers "content-type"))
@@ -151,12 +192,13 @@
     (deserialize-fn body encoding)))
 
 (defn event->structured-http
-  "Creates http message in structured mode for event."
+  "Creates http message in structured mode from an event."
   [event format-name serialize-fn charset]
   {:headers {"content-type" (str "application/cloudevents+" format-name "; charset=" charset)}
    :body    (serialize-fn event)})
 
 (defn http->event
+  "Creates CloudEvent from http message in either binary or structured mode."
   [http-msg serializers]
   (cond
     (binary-http? http-msg) (binary-http->event http-msg)
