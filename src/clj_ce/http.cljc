@@ -48,13 +48,12 @@
        :time              "ce-time"})
 
 (def ^:private field->header-v1
-  (merge field->header-common
-         #:ce{:data-schema "ce-dataschema"}))
+  (conj field->header-common
+        [:ce/data-schema "ce-dataschema"]))
 
 (def ^:private field->header-v03
-  (merge field->header-common
-         #:ce{:schema-url            "ce-schemaurl"
-              :data-content-encoding "ce-datacontentencoding"}))
+  (conj field->header-common
+        [:ce/schema-url "ce-schemaurl"]))
 
 (def ^:private header->field-v1
   (map-invert field->header-v1))
