@@ -17,16 +17,16 @@
   Examples:
 
   (clj-http.client/post \"http://localhost/\"
-                        (event->binary-http #:ce{:id \"42\"
-                                                 :spec-version \"1.0\"
-                                                 :type \"my.type\"
-                                                 :source \"http://example.com/\"}))
+                        (event->binary-msg #:ce{:id \"42\"
+                                                :spec-version \"1.0\"
+                                                :type \"my.type\"
+                                                :source \"http://example.com/\"}))
 
   (defn ring-echo-handler
     [req]
     (-> req
-        (binary-http->event)
-        (event->binary-http)
+        (binary-msg->event)
+        (event->binary-msg)
         (assoc :status 200)))"
 
   (:require [clj-ce.util :refer [parse-uri ser-time deser-time]]
@@ -104,23 +104,23 @@
         [(field->header field)
          (field->ser-fn field identity)]))))
 
-(defn- structured-http?
+(defn- structured-msg?
   [http-msg]
   (-> http-msg
       (:headers)
       (get "content-type" "")
       (starts-with? "application/cloudevents+")))
 
-(defn- binary-http?
+(defn- binary-msg?
   [http-msg]
   (contains? (:headers http-msg) "ce-id"))
 
-(defn- ce-http?
+(defn- ce-msg?
   [http-msg]
-  (or (structured-http? http-msg)
-      (binary-http? http-msg)))
+  (or (structured-msg? http-msg)
+      (binary-msg? http-msg)))
 
-(defn binary-http->event
+(defn binary-msg->event
   "Creates CloudEvent from http message in binary format."
   [{:keys [headers body]}]
   (let [headers (->> headers
@@ -148,7 +148,7 @@
       (assoc event :ce/data body)
       event)))
 
-(defn event->binary-http
+(defn event->binary-msg
   "Creates http message in binary mode from an event."
   [event]
   (let [field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
@@ -183,7 +183,7 @@
       [format charset]
       ["application/octet-stream" nil])))
 
-(defn structured-http->event
+(defn structured-msg->event
   "Creates CloudEvent from http message in structured mode."
   [http-msg deserializers]
   (let [{:keys [headers body]} http-msg
@@ -191,16 +191,16 @@
         deserialize-fn (deserializers format)]
     (deserialize-fn body encoding)))
 
-(defn event->structured-http
+(defn event->structured-msg
   "Creates http message in structured mode from an event."
   [event format-name serialize-fn charset]
   {:headers {"content-type" (str "application/cloudevents+" format-name "; charset=" charset)}
    :body    (serialize-fn event)})
 
-(defn http->event
+(defn msg->event
   "Creates CloudEvent from http message in either binary or structured mode."
   [http-msg serializers]
   (cond
-    (binary-http? http-msg) (binary-http->event http-msg)
-    (structured-http? http-msg) (structured-http->event http-msg serializers)
+    (binary-msg? http-msg) (binary-msg->event http-msg)
+    (structured-msg? http-msg) (structured-msg->event http-msg serializers)
     :else nil))
