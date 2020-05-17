@@ -106,10 +106,8 @@
 
 (defn- structured-msg?
   [http-msg]
-  (-> http-msg
-      (:headers)
-      (get "content-type" "")
-      (starts-with? "application/cloudevents+")))
+  (let [content-type (get-in http-msg [:headers "content-type"] "")]
+    (starts-with? content-type "application/cloudevents+")))
 
 (defn- binary-msg?
   [http-msg]
