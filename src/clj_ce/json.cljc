@@ -3,7 +3,13 @@
             [clojure.set :refer [map-invert]]
             #?(:clj [clojure.data.json :as json])
             #?(:cljs [goog.crypt.base64 :as b64]))
-  #?(:clj (:import (java.io InputStream ByteArrayInputStream InputStreamReader PushbackReader StringReader)
+  #?(:clj (:import (java.io InputStream
+                            ByteArrayInputStream
+                            InputStreamReader
+                            PushbackReader
+                            StringReader
+                            ByteArrayOutputStream
+                            OutputStreamWriter)
                    (java.util Base64))))
 
 (def ^:private js-field->clj-field-common
@@ -81,7 +87,7 @@
    "data_base64" deser-data-base-64
    "data"        deser-data})
 
-(def ^:private js-field->ser-fn
+(def ^:private field->ser-fn
   #:ce{:time        ser-time
        :source      ser-uri
        :data-schema ser-uri
@@ -90,6 +96,10 @@
 (def js-field->clj-field-by-version
   {"1.0" js-field->clj-field-v1
    "0.3" js-field->clj-field-v03})
+
+(def clj-field->js-field-by-version
+  {"1.0" clj-field->js-field-v1
+   "0.3" clj-field->js-field-v03})
 
 (defprotocol Data
   "Abstract various sources of data e.g. byte array or input stream"
@@ -101,12 +111,12 @@
      (Class/forName "[B")
      (->character-source
        [data charset]
-       (InputStreamReader. (ByteArrayInputStream. data) ^String charset))
+       (InputStreamReader. (ByteArrayInputStream. ^bytes data) ^String charset))
 
      String
      (->character-source
        [data _]
-       (StringReader. data))
+       (StringReader. ^String data))
 
      InputStream
      (->character-source
@@ -153,7 +163,7 @@
   (->character-source data charset))
 
 (defn- data->obj
-  "Transforms data to a map representing JS object."
+  "Transforms data to a clojure map representing JS object."
   [data & [charset]]
   #?(:clj  (json/read (PushbackReader. (data->characters data charset)))
      :cljs (js->clj (js/JSON.parse (data->characters data charset)))))
@@ -173,8 +183,29 @@
                (assoc-in event [:ce/extensions (keyword js-field)] js-value)))]
     (reduce rf {} js-obj)))
 
+#?(:clj
+   (defn- write-json
+     [m charset]
+     (let [bos (ByteArrayOutputStream.)]
+       (with-open [writer (OutputStreamWriter. bos ^String charset)]
+         (json/write m writer))
+       (.toByteArray bos))))
+
 (defn serialize
   "Converts cloud event to data containing JSON."
-  [event & [charset]]
-  #?(:clj  nil
-     :cljs nil))
+  [event & options]
+  (let [{:keys [charset]
+         :or   {charset "utf-8"}} options
+        clj-field->js-field (clj-field->js-field-by-version (:ce/spec-version event))
+        fields (->> event
+                    (keep (fn [[clj-field clj-value]]
+                            (if-let [js-field (clj-field->js-field clj-field)]
+                              (let [ser-fn (field->ser-fn clj-field (fn [x _] x))]
+                                [js-field (ser-fn clj-value event)]))))
+                    (into {}))
+        extensions (->> (:ce/extensions event)
+                        (map (fn [[k v]] [(name k) v]))
+                        (into {}))]
+    (#?(:clj  #(write-json % charset)
+        :cljs #(js/JSON.stringify (clj->js %)))
+      (merge fields extensions))))

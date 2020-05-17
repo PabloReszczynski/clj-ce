@@ -28,6 +28,13 @@
                        (event->binary-http)
                        (binary-http->event)))))))
 
+(deftest structured-http->event&back-test-utf8
+  (doseq [arguments struct-data/data]
+    (let [{:keys [event]} arguments]
+      (is (= event (-> event
+                       (event->structured-http "json" j/serialize "utf-8")
+                       (structured-http->event {"json" j/deserialize})))))))
+
 #?(:clj
    (do (deftest structured-http->event-test-utf8
          (doseq [arguments struct-data/data]
@@ -46,6 +53,7 @@
                  e (structured-http->event {:headers headers :body body}
                                            {"json" j/deserialize})]
              (is (= event e))))))
+
    :cljs
    (do (deftest structured-http->event-test-str-body
          (doseq [arguments struct-data/data]

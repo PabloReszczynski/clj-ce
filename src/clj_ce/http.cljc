@@ -128,13 +128,6 @@
     {:headers headers
      :body    (:ce/data event)}))
 
-(defn event->structured-http
-  "Creates http request/response for event in structured format."
-  [event]
-  (throw (#?(:clj  UnsupportedOperationException.
-             :cljs js/Error.)
-          "Structured messages is not supported at the time.")))
-
 (defn ^:private parse-content-type
   [content-type]
   (let [[format-part charset-part] (split content-type #";")
@@ -150,16 +143,22 @@
       ["application/octet-stream" nil])))
 
 (defn structured-http->event
-  "Get cloud event from request/response in structured format."
-  [http-msg serializers]
+  "Get cloud event from http message in structured mode."
+  [http-msg deserializers]
   (let [{:keys [headers body]} http-msg
         [format encoding] (parse-content-type (headers "content-type"))
-        serialize-fn (serializers format)]
-    (serialize-fn body encoding)))
+        deserialize-fn (deserializers format)]
+    (deserialize-fn body encoding)))
+
+(defn event->structured-http
+  "Creates http message in structured mode for event."
+  [event format-name serialize-fn charset]
+  {:headers {"content-type" (str "application/cloudevents+" format-name "; charset=" charset)}
+   :body    (serialize-fn event)})
 
 (defn http->event
-  [req & [opts]]
+  [http-msg serializers]
   (cond
-    (binary-http? req) (binary-http->event req)
-    (structured-http? req) (structured-http->event req (:a opts))
+    (binary-http? http-msg) (binary-http->event http-msg)
+    (structured-http? http-msg) (structured-http->event http-msg serializers)
     :else nil))
