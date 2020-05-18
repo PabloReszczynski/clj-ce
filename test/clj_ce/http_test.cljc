@@ -3,7 +3,8 @@
             [clj-ce.test-data-binary :as bin-data]
             [clj-ce.test-data-structured :as struct-data]
             [clj-ce.http :as ce-http]
-            [clj-ce.json :as j]))
+            [clj-ce.json :as j])
+  #?(:clj (:import (java.io ByteArrayInputStream))))
 
 #?(:cljs
    (extend-protocol IEquiv
@@ -32,58 +33,46 @@
                        (ce-http/event->structured-msg "json" j/cloudevent->json "utf-8")
                        (ce-http/structured-msg->event {"json" j/json->cloudevent})))))))
 
-#?(:clj
-   (do (deftest structured-http->event-test-utf8
-         (doseq [arguments struct-data/data]
-           (let [{:keys [headers body event]} arguments
-                 body (.getBytes ^String body "UTF-8")
-                 headers (update headers "content-type" #(str % "; charset=utf-8"))
-                 e (ce-http/structured-msg->event {:headers headers :body body}
-                                                  {"json" j/json->cloudevent})]
-             (is (= event e)))))
+(def encodings
+  "Body of http message may be of various types and using various charsets.
 
-       (deftest structured-http->event-test-iso-8859-2
-         (doseq [arguments struct-data/data]
-           (let [{:keys [headers body event]} arguments
-                 body (.getBytes ^String body "ISO-8859-2")
-                 headers (update headers "content-type" #(str % "; charset=iso-8859-2"))
-                 e (ce-http/structured-msg->event {:headers headers :body body}
-                                                  {"json" j/json->cloudevent})]
-             (is (= event e))))))
+  This variable contains a collection of triples [name, body-fn, headers-fn],
+  where `name` is name of encoding, `body-fn` is a function that transform
+  body string into desired object (e.g. java.io.InputStream) and `headers-fn`
+  is a function that updates headers accordingly (e.g. it sets charset in
+  content-type header)."
+   #?(:clj
+      [["String"
+        identity
+        identity]
+       ["UTF-8 in bytes"
+        (fn [body] (.getBytes ^String body "UTF-8"))
+        (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]
+       ["ISO-8859-2 in bytes"
+        (fn [body] (.getBytes ^String body "ISO-8859-2"))
+        (fn [headers] (update headers "content-type" #(str % "; charset=iso-8859-2")))]
+       ["UTF-8 in InputStream"
+        (fn [body] (ByteArrayInputStream. (.getBytes ^String body "UTF-8")))
+        (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]]
+      :cljs
+      [["String"
+        identity
+        identity]
+       ["UTF-8 in Uint8Array"
+        (fn [body] (.encode (js/TextEncoder. "utf-8") body))
+        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
+       ["UTF-8 in ArrayBuffer"
+        (fn [body] (.-buffer (.encode (js/TextEncoder. "utf-8") body)))
+        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
+       ["UTF-8 in Buffer"
+        (fn [body] (js/Buffer.from body "utf8"))
+        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]]))
 
-   :cljs
-   (do (deftest structured-http->event-test-str-body
-         (doseq [arguments struct-data/data]
-           (let [{:keys [headers body event]} arguments
-                 headers (update headers "content-type" #(str % "; charset=utf-8"))
-                 e (ce-http/structured-msg->event {:headers headers :body body}
-                                                  {"json" j/json->cloudevent})]
-             (is (= event e)))))
-
-       (deftest structured-http->event-test-utf8-Uint8Array
-         (doseq [arguments struct-data/data]
-           (let [{:keys [headers body event]} arguments
-                 body (.encode (js/TextEncoder. "utf-8") body)
-                 headers (update headers "content-type" #(str % "; charset=utf-8"))
-                 e (ce-http/structured-msg->event {:headers headers :body body}
-                                                  {"json" j/json->cloudevent})]
-             (is (= event e)))))
-
-       (deftest structured-http->event-test-utf8-ArrayBuffer
-         (doseq [arguments struct-data/data]
-           (let [{:keys [headers body event]} arguments
-                 body (.-buffer (.encode (js/TextEncoder. "utf-8") body))
-                 headers (update headers "content-type" #(str % "; charset=utf-8"))
-                 e (ce-http/structured-msg->event {:headers headers :body body}
-                                                  {"json" j/json->cloudevent})]
-             (is (= event e)))))
-
-       (when (resolve 'js/Buffer)
-         (deftest structured-http->event-test-utf8-Buffer
-           (doseq [arguments struct-data/data]
-             (let [{:keys [headers body event]} arguments
-                   body (js/Buffer.from body "utf8")
-                   headers (update headers "content-type" #(str % "; charset=utf-8"))
-                   e (ce-http/structured-msg->event {:headers headers :body body}
-                                                    {"json" j/json->cloudevent})]
-               (is (= event e))))))))
+(deftest structured-http->event-test
+  (doseq [[name body-fn headers-fn] encodings]
+    (doseq [[idx {:keys [headers body event]}] (map-indexed vector struct-data/data)]
+      (let [body (body-fn body)
+            headers (headers-fn headers)
+            e (ce-http/structured-msg->event {:headers headers :body body}
+                                             {"json" j/json->cloudevent})]
+        (is (= event e) (str "Test idx: " idx ", with encoding: " name "."))))))
