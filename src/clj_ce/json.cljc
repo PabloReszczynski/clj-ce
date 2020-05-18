@@ -56,7 +56,7 @@
   [js-field-value _]
   (util/deser-time js-field-value))
 
-(defn atob
+(defn- atob
   [s]
   #?(:clj  (String. (.decode (Base64/getDecoder) ^String s) "UTF-8")
      :cljs (.decode (js/TextDecoder. "utf-8") (b64/decodeStringToUint8Array s))))
@@ -95,11 +95,11 @@
        :data-schema ser-uri
        :schema-url  ser-uri})
 
-(def js-field->clj-field-by-version
+(def ^:private js-field->clj-field-by-version
   {"1.0" js-field->clj-field-v1
    "0.3" js-field->clj-field-v03})
 
-(def clj-field->js-field-by-version
+(def ^:private clj-field->js-field-by-version
   {"1.0" clj-field->js-field-v1
    "0.3" clj-field->js-field-v03})
 
