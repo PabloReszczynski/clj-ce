@@ -1,6 +1,16 @@
 (ns clj-ce.json
   "This namespace contains functions for (de)serializing CloudEvents from/to JSON.
-  It's mainly intended for handling http messages in structured mode with JSON."
+  It's mainly intended for handling http messages in structured mode with JSON.
+
+  Examples:
+
+  (clj-ce.http/event->structured-msg event
+                                     \"json\"
+                                     clj-ce.json/cloudevent->json
+                                     \"utf-8\")
+
+  (ce-http/structured-msg->event http-msg
+                                 {\"json\" clj-ce.json/json->cloudevent})"
   (:require [clj-ce.util :as util]
             [clojure.set :refer [map-invert]]
             #?(:clj [clojure.data.json :as json])
