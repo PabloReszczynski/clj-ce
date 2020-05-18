@@ -1,4 +1,12 @@
 (ns clj-ce.spec
+  "This namespace contains clojure.spec for CloudEvent (registered as :ce/event).
+
+  Example:
+
+  (defn foo
+    [event]
+    {:pre [(s/valid? :ce/event event)]}
+    nil)"
   (:require [clojure.spec.alpha :as s]))
 
 (s/def :ce/data-schema uri?)
