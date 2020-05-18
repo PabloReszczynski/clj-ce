@@ -106,7 +106,8 @@
 (defprotocol Data
   "Abstract various sources of data e.g. byte array or input stream"
   (->character-source [this charset]
-    "For Clojure returns java.io.Reader for ClojureScript returns string"))
+    "Transforms data to characters.
+    For Clojure returns java.io.Reader for ClojureScript returns string"))
 
 #?(:clj
    (extend-protocol Data
