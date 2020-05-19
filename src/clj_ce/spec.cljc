@@ -22,7 +22,7 @@
 (s/def :ce/subject string?)
 (s/def :ce/data any?)
 
-(defmulti event-version :ce/spec-version)
+(defmulti ^:private event-version :ce/spec-version)
 (defmethod event-version "0.3" [_]
   (s/keys :req [:ce/id :ce/spec-version :ce/source :ce/type]
           :opt [:ce/data-content-type :ce/schema-url :ce/subject :ce/data-content-encoding :ce/time :ce/data :ce/extensions]))
