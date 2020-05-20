@@ -2,20 +2,23 @@
   "This namespace contains functions for reading/writing
   CloudEvents from/to http messages.
 
-  Http message in this context is a map with :headers and :body keys.
-  (not unlikely ring request/response).
-  The http message can be then used as http request or response.
+  `Http message` in this context is a map with `:headers` and `:body` keys.
+  (Not unlikely `ring` request/response).
+  The `http message` can be then used as http request or response.
 
-  CloudEvent is here represented by a map
-  where keys are namespaced keywords :ce/*.
+  `CloudEvent` is here represented by a map
+  where keys are namespaced keywords `:ce/[field-name]`.
 
-  For instance #:ce{:id \"42\",
-                    :spec-version \"1.0\",
-                    :type \"my.type\",
-                    :source \"http://example.com/\"}
+  For instance
+  ``` clojure
+  #:ce{:id \"42\",
+       :spec-version \"1.0\",
+       :type \"my.type\",
+       :source \"http://example.com/\"}
+  ```
 
   Examples:
-
+  ``` clojure
   (clj-http.client/post \"http://localhost/\"
                         (event->binary-msg #:ce{:id \"42\"
                                                 :spec-version \"1.0\"
@@ -27,8 +30,9 @@
     (-> req
         (binary-msg->event)
         (event->binary-msg)
-        (assoc :status 200)))"
-
+        (assoc :status 200)))
+  ```"
+  {:doc/format :markdown}
   (:require [clj-ce.util :refer [parse-uri ser-time deser-time]]
             [clojure.string :refer [starts-with? index-of trim split lower-case]]
             [clojure.set :refer [map-invert]])

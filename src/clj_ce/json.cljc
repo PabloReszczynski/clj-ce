@@ -3,14 +3,17 @@
   It's mainly intended for handling http messages in structured mode with JSON.
 
   Examples:
-
+  ```
   (clj-ce.http/event->structured-msg event
                                      \"json\"
                                      clj-ce.json/cloudevent->json
                                      \"utf-8\")
 
   (ce-http/structured-msg->event http-msg
-                                 {\"json\" clj-ce.json/json->cloudevent})"
+                                 {\"json\" clj-ce.json/json->cloudevent})
+  ```"
+
+  {:doc/format :markdown}
   (:require [clj-ce.util :as util]
             [clojure.set :refer [map-invert]]
             #?(:clj [clojure.data.json :as json])
@@ -182,7 +185,10 @@
      :cljs (js->clj (js/JSON.parse (data->characters data charset)))))
 
 (defn json->cloudevent
-  "Converts JSON to CloudEvent."
+  "Converts JSON to CloudEvent.
+
+  See also [[clj-ce.http/structured-msg->event]]."
+  {:doc/format :markdown}
   [data & [charset]]
   {:pre [(satisfies? Data data) (or (nil? charset) (string? charset))]}
   (let [js-obj (data->obj data charset)
@@ -205,7 +211,10 @@
        (.toByteArray bos))))
 
 (defn cloudevent->json
-  "Converts CloudEvent to JSON."
+  "Converts CloudEvent to JSON.
+
+  See also [[clj-ce.http/event->structured-msg]]."
+  {:doc/format :markdown}
   [event & options]
   (let [{:keys [charset]
          :or   {charset "utf-8"}} options
