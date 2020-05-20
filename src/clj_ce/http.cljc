@@ -117,6 +117,25 @@
   (or (structured-msg? http-msg)
       (binary-msg? http-msg)))
 
+(defn- create-rf
+  "Creates a reduce function that that reduces headers into a CloudEvent."
+  [version]
+  (let [header->field&deser-fn (header->field&deser-fn-by-version version)]
+    (fn [event [header-key header-value]]
+      (cond
+       ;; ce field
+        (header->field&deser-fn header-key)
+        (let [[field deser-fn] (header->field&deser-fn header-key)]
+          (assoc event field (deser-fn header-value)))
+
+       ;; ce extension field
+        (and (starts-with? header-key "ce-") (> (count header-key) 3))
+        (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
+
+       ;; non ce header
+        :else
+        event))))
+
 (defn binary-msg->event
   "Creates CloudEvent from http message in binary format."
   [http-msg]
@@ -126,21 +145,7 @@
                             [(lower-case k) v]))
                      (into headers))
         version (headers "ce-specversion")
-        header->field&deser-fn (header->field&deser-fn-by-version version)
-        rf (fn [event [header-key header-value]]
-             (cond
-               ;; ce field
-               (header->field&deser-fn header-key)
-               (let [[field deser-fn] (header->field&deser-fn header-key)]
-                 (assoc event field (deser-fn header-value)))
-
-               ;; ce extension field
-               (and (starts-with? header-key "ce-") (> (count header-key) 3))
-               (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
-
-               ;; non ce header
-               :else
-               event))
+        rf (create-rf version)
         event (reduce rf {} headers)]
     (if body
       (assoc event :ce/data body)
