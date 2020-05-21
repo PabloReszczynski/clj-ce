@@ -2,12 +2,12 @@
   "This namespace contains functions for reading/writing
   CloudEvents from/to http messages.
 
-  `Http message` in this context is a map with `:headers` and `:body` keys.
+  **Http message** in this context is a map with `:headers` and `:body` keys.
   (Not unlikely `ring` request/response).
   The `http message` can be then used as http request or response.
 
-  `CloudEvent` is here represented by a map
-  where keys are namespaced keywords `:ce/[field-name]`.
+  **CloudEvent** is represented by a map
+  where keys are namespaced keywords of shape `:ce/[field-name]`.
 
   For instance
   ``` clojure
