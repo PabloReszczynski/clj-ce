@@ -26,6 +26,7 @@
                        (ce-http/event->binary-msg)
                        (ce-http/binary-msg->event)))))))
 
+
 (deftest structured-http->event&back-test-utf8
   (doseq [arguments struct-data/data]
     (let [{:keys [event]} arguments]
@@ -65,11 +66,24 @@
        (fn [body] (.-buffer (.encode (js/TextEncoder. "utf-8") body)))
        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]]))
 
+(defn- fix-up-data [event]
+  "Converts binary body to string body for sake of testing equality."
+  (let [{:ce/keys [data]} event]
+    #?(:clj
+      (if (instance? (Class/forName "[B") data)
+        (update event :ce/data #(String. ^bytes % "utf-8"))
+        event)
+      :cljs
+      (if (instance? js/Uint8Array data)
+        (update event :ce/data #(.decode (js/TextDecoder. "UTF-8") %))
+        event))))
+
 (deftest structured-http->event-test
   (doseq [[name body-fn headers-fn] encodings]
     (doseq [[idx {:keys [headers body event]}] (map-indexed vector struct-data/data)]
       (let [body (body-fn body)
             headers (headers-fn headers)
             e (ce-http/structured-msg->event {:headers headers :body body}
-                                             {"json" j/json->cloudevent})]
+                                             {"json" j/json->cloudevent})
+            e (fix-up-data e)]
         (is (= event e) (str "Test idx: " idx ", with encoding: " name "."))))))

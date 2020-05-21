@@ -9,14 +9,16 @@
                                      clj-ce.json/cloudevent->json
                                      \"utf-8\")
 
-  (ce-http/structured-msg->event http-msg
-                                 {\"json\" clj-ce.json/json->cloudevent})
+  (ce-clj-ce.http/structured-msg->event http-msg
+                                        {\"json\" clj-ce.json/json->cloudevent})
   ```"
 
   {:doc/format :markdown}
   (:require [clj-ce.util :as util]
             [clojure.set :refer [map-invert]]
-            #?(:clj [clojure.data.json :as json])
+            [clojure.string :refer [starts-with? index-of]]
+            #?@(:clj ([clojure.data.json :as json]
+                      [clojure.java.io :as jio]))
             #?(:cljs [goog.crypt.base64 :as b64]))
   #?(:clj (:import (java.io InputStream
                             ByteArrayInputStream
@@ -24,8 +26,56 @@
                             PushbackReader
                             StringReader
                             ByteArrayOutputStream
-                            OutputStreamWriter)
-                   (java.util Base64))))
+                            OutputStreamWriter Reader)
+                   (java.util Base64)
+                   (java.nio.charset StandardCharsets))))
+
+(defprotocol ^{:doc/format :markdown} CharacterData
+  "Abstract various object types that can be interpreted
+   as a sequence of characters (e.g. js/Uint8Array, java.io.InputStream or java.lang.String).
+
+  This protocol has default implementations for:
+
+  * java.io.Reader
+  * java.lang.String
+  * java.io.InputStream
+  * byte[]
+  * js/string
+  * js/ArrayBuffer
+  * js/Uint8Array
+  * nil
+
+  The `:body` of `http message` should satisfy this protocol when used with this module."
+
+  (^{:doc/format :markdown} ->text [this charset]
+    "Transforms data to sequence of characters.
+
+    For Clojure returns `java.io.Reader`.
+
+    For ClojureScript returns `string`."))
+
+(defprotocol ^{:doc/format :markdown} BinaryData
+  "Abstract various object types that can be interpreted
+  as a sequence of bytes (js/Uint8Array or java.io.InputStream).
+
+  This protocol has default implementations for:
+
+  * byte[]
+  * java.io.InputStream
+  * java.lang.String
+  * java.io.Reader
+  * js/string
+  * js/Uint8Array
+  * js/ArrayBuffer
+  * nil
+
+  The `:ce/data` of `CloudEvent` should satisfy this protocol when used with this module."
+  (^{:doc/format :markdown} ->binary [this]
+    "Transforms data to sequence of bytes.
+
+    For Clojure this should return `java.io.InputStream`.
+
+    For ClojureScript this should return `js/Uint8Array`."))
 
 (def ^:private js-field->clj-field-common
   {"id"              :ce/id
@@ -69,10 +119,15 @@
   [js-field-value _]
   (util/deser-time js-field-value))
 
-(defn- atob
+(defn- decode-base-64
+  "Decodes string containing data encoded as base64 into byte array.
+
+  For Clojure returns byte[].
+
+  For ClojureScript returns Uint8Array."
   [s]
-  #?(:clj  (String. (.decode (Base64/getDecoder) ^String s) "UTF-8")
-     :cljs (.decode (js/TextDecoder. "utf-8") (b64/decodeStringToUint8Array s))))
+  #?(:clj  (.decode (Base64/getDecoder) ^String s)
+     :cljs (b64/decodeStringToUint8Array s)))
 
 (defn- deser-data
   [field-value js-obj]
@@ -81,7 +136,7 @@
 
       (and (= dce "base64")
            (string? field-value))
-      (atob field-value)
+      (decode-base-64 field-value)
 
       (string? field-value)
       field-value
@@ -92,7 +147,32 @@
 
 (defn- deser-data-base-64
   [field-value _]
-  (atob field-value))
+  (decode-base-64 field-value))
+
+(defn- charset-from-data-content-type
+  [data-content-type]
+  (when data-content-type
+   (-> (re-find #"^.*;\s*charset=(.+).*$" data-content-type)
+       (second)
+       (or "utf-8"))))
+
+(defn- ser-data
+  [data event]
+  (let [{:ce/keys [data-content-type]} event
+        charset (charset-from-data-content-type data-content-type)]
+    (cond
+      (starts-with? data-content-type "text/")
+      data
+
+      (or (nil? data-content-type)
+          (starts-with? data-content-type "application/json"))
+      data
+
+      (starts-with? data-content-type "application/octet-stream")
+      (->binary data)
+
+      :else
+      data)))
 
 (def ^:private field->deser-fn
   {"time"        deser-time
@@ -106,77 +186,22 @@
   #:ce{:time        ser-time
        :source      ser-uri
        :data-schema ser-uri
-       :schema-url  ser-uri})
+       :schema-url  ser-uri
+       :data        ser-data})
 
 (def ^:private js-field->clj-field-by-version
   {"1.0" js-field->clj-field-v1
-   "0.3" js-field->clj-field-v03})
+   "0.3" js-field->clj-field-v03
+   nil {}})
 
 (def ^:private clj-field->js-field-by-version
   {"1.0" clj-field->js-field-v1
-   "0.3" clj-field->js-field-v03})
-
-(defprotocol Data
-  "Abstract various sources of data e.g. byte array or input stream"
-  (->character-source [this charset]
-    "Transforms data to characters.
-    For Clojure returns java.io.Reader for ClojureScript returns string"))
-
-#?(:clj
-   (extend-protocol Data
-     (Class/forName "[B")
-     (->character-source
-       [data charset]
-       (InputStreamReader. (ByteArrayInputStream. ^bytes data) ^String charset))
-
-     String
-     (->character-source
-       [data _]
-       (StringReader. ^String data))
-
-     InputStream
-     (->character-source
-       [data charset]
-       (InputStreamReader. ^InputStream data ^String charset))
-
-     nil
-     (->character-source
-       [_ _]
-       (StringReader. ""))))
-
-#?(:cljs
-   (extend-protocol Data
-     string
-     (->character-source
-       [data _]
-       data)
-
-     js/Uint8Array
-     (->character-source
-       [data charset]
-       (.decode (js/TextDecoder. charset) data))
-
-     js/ArrayBuffer
-     (->character-source
-       [data charset]
-       (.decode (js/TextDecoder. charset) (js/Uint8Array. data)))
-
-     nil
-     (->character-source
-       [_ _]
-       "")))
-
-#?(:cljs
-   (when (resolve 'js.Buffer)
-     (extend-protocol Data
-       js/Buffer
-       (->character-source [data charset] (.toString data charset)))))
+   "0.3" clj-field->js-field-v03
+   nil {}})
 
 (defn- data->characters
-  "Abstract various sources of data e.g. byte array or input stream.
-  For Clojure returns java.io.Reader for ClojureScript returns string."
   [data & [charset]]
-  (->character-source data charset))
+  (->text data charset))
 
 (defn- data->obj
   "Transforms data to a clojure map representing JS object."
@@ -187,10 +212,12 @@
 (defn json->cloudevent
   "Converts JSON to CloudEvent.
 
+  The `data` parameter must satisfy the [[CharacterData]] protocol.
+
   See also [[clj-ce.http/structured-msg->event]]."
   {:doc/format :markdown}
   [data & [charset]]
-  {:pre [(satisfies? Data data) (or (nil? charset) (string? charset))]}
+  {:pre [(satisfies? CharacterData data) (or (nil? charset) (string? charset))]}
   (let [js-obj (data->obj data charset)
         js-field->clj-field (js-field->clj-field-by-version (js-obj "specversion"))
         rf (fn [event [js-field js-value]]
@@ -207,11 +234,14 @@
      [m charset]
      (let [bos (ByteArrayOutputStream.)]
        (with-open [writer (OutputStreamWriter. bos ^String charset)]
-         (json/write m writer))
+         (json/write m writer :escape-unicode true))
        (.toByteArray bos))))
 
 (defn cloudevent->json
   "Converts CloudEvent to JSON.
+
+  If binary data is carried by the event then
+  the `:ce/data` of the `event` parameter must satisfy the [[BinaryData]] protocol.
 
   See also [[clj-ce.http/event->structured-msg]]."
   {:doc/format :markdown}
@@ -231,3 +261,46 @@
     (#?(:clj  #(write-json % charset)
         :cljs #(js/JSON.stringify (clj->js %)))
      (merge fields extensions))))
+
+#?(:clj
+   (extend-protocol CharacterData
+     (Class/forName "[B")
+     (->text [arr charset] (jio/reader arr :encoding charset))
+     InputStream
+     (->text [is charset] (jio/reader is :encoding charset))
+     String
+     (->text [s _] (StringReader. ^String s))
+     Reader (->text [reader _] reader)
+     nil
+     (->text [_ _] (StringReader. "")))
+
+   :cljs
+   (extend-protocol CharacterData
+     string
+     (->text [data _] data)
+     js/Uint8Array
+     (->text [data charset] (.decode (js/TextDecoder. charset) data))
+     js/ArrayBuffer
+     (->text [data charset] (.decode (js/TextDecoder. charset) (js/Uint8Array. data)))
+     nil
+     (->text [_ _] "")))
+
+#?(:clj
+   (extend-protocol BinaryData
+     (Class/forName "[B")
+     (->binary [data] (jio/input-stream data))
+     InputStream
+     (->binary [stream] stream)
+     String
+     (->binary [s] (jio/input-stream (.getBytes s StandardCharsets/UTF_8) "UTF-8"))
+     Reader
+     (->binary [reader] (jio/input-stream (.getBytes (slurp reader "UTF-8") StandardCharsets/UTF_8)))
+     nil
+     (->binary [_] (jio/input-stream (byte-array 0))))
+
+   :cljs
+   (extend-protocol BinaryData
+     js/Uint8Array
+     (->binary [arr] arr)
+     js/ArrayBuffer
+     (->binary [arr-buff] (.-buffer arr-buff))))
