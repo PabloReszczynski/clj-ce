@@ -63,9 +63,6 @@
        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
       ["UTF-8 in ArrayBuffer"
        (fn [body] (.-buffer (.encode (js/TextEncoder. "utf-8") body)))
-       (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
-      ["UTF-8 in Buffer"
-       (fn [body] (js/Buffer.from body "utf8"))
        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]]))
 
 (deftest structured-http->event-test
