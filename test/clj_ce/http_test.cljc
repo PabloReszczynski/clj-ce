@@ -41,32 +41,32 @@
   body string into desired object (e.g. java.io.InputStream) and `headers-fn`
   is a function that updates headers accordingly (e.g. it sets charset in
   content-type header)."
-   #?(:clj
-      [["String"
-        identity
-        identity]
-       ["UTF-8 in bytes"
-        (fn [body] (.getBytes ^String body "UTF-8"))
-        (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]
-       ["ISO-8859-2 in bytes"
-        (fn [body] (.getBytes ^String body "ISO-8859-2"))
-        (fn [headers] (update headers "content-type" #(str % "; charset=iso-8859-2")))]
-       ["UTF-8 in InputStream"
-        (fn [body] (ByteArrayInputStream. (.getBytes ^String body "UTF-8")))
-        (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]]
-      :cljs
-      [["String"
-        identity
-        identity]
-       ["UTF-8 in Uint8Array"
-        (fn [body] (.encode (js/TextEncoder. "utf-8") body))
-        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
-       ["UTF-8 in ArrayBuffer"
-        (fn [body] (.-buffer (.encode (js/TextEncoder. "utf-8") body)))
-        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
-       ["UTF-8 in Buffer"
-        (fn [body] (js/Buffer.from body "utf8"))
-        (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]]))
+  #?(:clj
+     [["String"
+       identity
+       identity]
+      ["UTF-8 in bytes"
+       (fn [body] (.getBytes ^String body "UTF-8"))
+       (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]
+      ["ISO-8859-2 in bytes"
+       (fn [body] (.getBytes ^String body "ISO-8859-2"))
+       (fn [headers] (update headers "content-type" #(str % "; charset=iso-8859-2")))]
+      ["UTF-8 in InputStream"
+       (fn [body] (ByteArrayInputStream. (.getBytes ^String body "UTF-8")))
+       (fn [headers] (update headers "content-type" #(str % "; charset=UTF-8")))]]
+     :cljs
+     [["String"
+       identity
+       identity]
+      ["UTF-8 in Uint8Array"
+       (fn [body] (.encode (js/TextEncoder. "utf-8") body))
+       (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
+      ["UTF-8 in ArrayBuffer"
+       (fn [body] (.-buffer (.encode (js/TextEncoder. "utf-8") body)))
+       (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]
+      ["UTF-8 in Buffer"
+       (fn [body] (js/Buffer.from body "utf8"))
+       (fn [headers] (update headers "content-type" #(str % "; charset=utf-8")))]]))
 
 (deftest structured-http->event-test
   (doseq [[name body-fn headers-fn] encodings]
