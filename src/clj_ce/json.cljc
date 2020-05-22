@@ -174,7 +174,7 @@
   (util/ser-time clj-field-value))
 
 #?(:clj
-   (defn is->base64-str [is]
+   (defn- is->base64-str [is]
      (let [bos (ByteArrayOutputStream.)]
        (with-open [os (.wrap (Base64/getEncoder) bos)]
          (jio/copy is os))
