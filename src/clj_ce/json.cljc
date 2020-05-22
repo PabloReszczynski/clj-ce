@@ -235,15 +235,15 @@
         (when js-field
           [js-field ser-fn])))))
 
-(defn- data->characters
+(defn- data->text
   [data & [charset]]
   (->text data charset))
 
 (defn- data->obj
   "Transforms data to a clojure map representing JS object."
   [data & [charset]]
-  #?(:clj  (json/read (PushbackReader. (data->characters data charset)))
-     :cljs (js->clj (js/JSON.parse (data->characters data charset)))))
+  #?(:clj  (json/read (PushbackReader. (data->text data charset)))
+     :cljs (js->clj (js/JSON.parse (data->text data charset)))))
 
 (defn json->cloudevent
   "Converts JSON to CloudEvent.
