@@ -97,23 +97,9 @@
         ["schemaurl" :ce/schema-url]
         ["datacontentencoding" ::transient]))
 
-(def ^:private clj-field->js-field-v1
-  (map-invert js-field->clj-field-v1))
-
-(def ^:private clj-field->js-field-v03
-  (map-invert js-field->clj-field-v03))
-
-(defn- ser-uri
-  [clj-field-value _]
-  (str clj-field-value))
-
 (defn- deser-uri
   [js-field-value _]
   (util/parse-uri js-field-value))
-
-(defn- ser-time
-  [clj-field-value _]
-  (util/ser-time clj-field-value))
 
 (defn- deser-time
   [js-field-value _]
@@ -149,12 +135,64 @@
   [field-value _]
   (decode-base-64 field-value))
 
+(def ^:private js-field->deser-fn
+  {"time"        deser-time
+   "source"      deser-uri
+   "dataschema"  deser-uri
+   "schemaurl"   deser-uri
+   "data_base64" deser-data-base-64
+   "data"        deser-data})
+
+(def ^:private js-field->clj-field-by-version
+  {"1.0" js-field->clj-field-v1
+   "0.3" js-field->clj-field-v03})
+
+(defn- js-field->clj-field&deser-fn#by-version
+  "Returns a function that maps JSON field to a pair [field, deser-fn],
+  where `field` is a field of CloudEvent (keyword) to which the JSON field is mapped to, and
+  `deser-fn` is a function used to deserialize the JSON value to the field."
+  [version]
+  (let [js-field->clj-field (js-field->clj-field-by-version version)]
+    (fn [js-field]
+      (let [clj-field (js-field->clj-field js-field)
+            deser-fn (js-field->deser-fn js-field (fn [x & _] x))]
+        (when clj-field
+          [clj-field deser-fn])))))
+
+(def ^:private clj-field->js-field-v1
+  (map-invert js-field->clj-field-v1))
+
+(def ^:private clj-field->js-field-v03
+  (map-invert js-field->clj-field-v03))
+
+(defn- ser-uri
+  [clj-field-value _]
+  (str clj-field-value))
+
+(defn- ser-time
+  [clj-field-value _]
+  (util/ser-time clj-field-value))
+
+#?(:clj
+   (defn is->base64-str [is]
+     (let [bos (ByteArrayOutputStream.)]
+       (with-open [os (.wrap (Base64/getEncoder) bos)]
+         (jio/copy is os))
+       (String. (.toByteArray bos) StandardCharsets/US_ASCII))))
+
+(defn- encode-base-64
+  "Encodes binary data (java.io.InputStream, js/Uint8Array)
+  into base64 string."
+  [bin]
+  #?(:clj  (is->base64-str bin)
+     :cljs (b64/encodeByteArray bin)))
+
 (defn- charset-from-data-content-type
   [data-content-type]
   (when data-content-type
-   (-> (re-find #"^.*;\s*charset=(.+).*$" data-content-type)
-       (second)
-       (or "utf-8"))))
+    (-> (re-find #"^.*;\s*charset=(.+).*$" data-content-type)
+        (second)
+        (or "utf-8"))))
 
 (defn- ser-data
   [data event]
@@ -169,35 +207,33 @@
       data
 
       (starts-with? data-content-type "application/octet-stream")
-      (->binary data)
+      (encode-base-64 (->binary data))
 
       :else
       data)))
 
-(def ^:private field->deser-fn
-  {"time"        deser-time
-   "source"      deser-uri
-   "dataschema"  deser-uri
-   "schemaurl"   deser-uri
-   "data_base64" deser-data-base-64
-   "data"        deser-data})
-
-(def ^:private field->ser-fn
+(def ^:private clj-field->ser-fn
   #:ce{:time        ser-time
        :source      ser-uri
        :data-schema ser-uri
        :schema-url  ser-uri
        :data        ser-data})
 
-(def ^:private js-field->clj-field-by-version
-  {"1.0" js-field->clj-field-v1
-   "0.3" js-field->clj-field-v03
-   nil {}})
-
-(def ^:private clj-field->js-field-by-version
+(def ^:private clj-field->js-field#by-version
   {"1.0" clj-field->js-field-v1
-   "0.3" clj-field->js-field-v03
-   nil {}})
+   "0.3" clj-field->js-field-v03})
+
+(defn- clj-field->js-field&ser-fn#by-version
+  "Returns a function that maps CloudEvent field to pair [field, ser-fn],
+  where `field` is a JSON field to which the CloudEvent field (keyword) is mapped to, and
+  `ser-fn` is a function used to serialize the field to the JSON value."
+  [version]
+  (let [clj-field->js-field (clj-field->js-field#by-version version)]
+    (fn [clj-field]
+      (let [js-field (clj-field->js-field clj-field)
+            ser-fn (clj-field->ser-fn clj-field (fn [x & _] x))]
+        (when js-field
+          [js-field ser-fn])))))
 
 (defn- data->characters
   [data & [charset]]
@@ -219,13 +255,12 @@
   [data & [charset]]
   {:pre [(satisfies? CharacterData data) (or (nil? charset) (string? charset))]}
   (let [js-obj (data->obj data charset)
-        js-field->clj-field (js-field->clj-field-by-version (js-obj "specversion"))
+        js-field->clj-field&deser-fn (js-field->clj-field&deser-fn#by-version (js-obj "specversion"))
         rf (fn [event [js-field js-value]]
-             (if-let [clj-field (js-field->clj-field js-field)]
-               (let [deser-fn (field->deser-fn js-field (fn [x & _] x))]
-                 (if (= clj-field ::transient)
-                   event
-                   (assoc event clj-field (deser-fn js-value js-obj))))
+             (if-let [[clj-field deser-fn] (js-field->clj-field&deser-fn js-field)]
+               (if (= clj-field ::transient)
+                 event
+                 (assoc event clj-field (deser-fn js-value js-obj)))
                (assoc-in event [:ce/extensions (keyword js-field)] js-value)))]
     (reduce rf {} js-obj)))
 
@@ -248,19 +283,18 @@
   [event & options]
   (let [{:keys [charset]
          :or   {charset "utf-8"}} options
-        clj-field->js-field (clj-field->js-field-by-version (:ce/spec-version event))
+        clj-field->js-field&ser-fn (clj-field->js-field&ser-fn#by-version (:ce/spec-version event))
         fields (->> event
                     (keep (fn [[clj-field clj-value]]
-                            (if-let [js-field (clj-field->js-field clj-field)]
-                              (let [ser-fn (field->ser-fn clj-field (fn [x _] x))]
-                                [js-field (ser-fn clj-value event)]))))
+                            (if-let [[js-field ser-fn] (clj-field->js-field&ser-fn clj-field)]
+                              [js-field (ser-fn clj-value event)])))
                     (into {}))
         extensions (->> (:ce/extensions event)
                         (map (fn [[k v]] [(name k) v]))
                         (into {}))]
     (#?(:clj  #(write-json % charset)
         :cljs #(js/JSON.stringify (clj->js %)))
-     (merge fields extensions))))
+      (merge fields extensions))))
 
 #?(:clj
    (extend-protocol CharacterData
