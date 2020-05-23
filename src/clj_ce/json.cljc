@@ -342,11 +342,11 @@
 #?(:clj
    (extend-protocol BinaryData
      (Class/forName "[B")
-     (->binary [data] (jio/input-stream data))
+     (->binary [data] (jio/input-stream data :encoding "UTF-8"))
      InputStream
      (->binary [stream] stream)
      String
-     (->binary [s] (jio/input-stream (.getBytes s StandardCharsets/UTF_8) "UTF-8"))
+     (->binary [s] (jio/input-stream (.getBytes s StandardCharsets/UTF_8) :encoding "UTF-8"))
      Reader
      (->binary [reader] (jio/input-stream (.getBytes (slurp reader "UTF-8") StandardCharsets/UTF_8)))
      nil
