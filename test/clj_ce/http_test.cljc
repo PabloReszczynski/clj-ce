@@ -70,13 +70,13 @@
   "Converts binary body to string body for sake of testing equality."
   (let [{:ce/keys [data]} event]
     #?(:clj
-      (if (instance? (Class/forName "[B") data)
-        (update event :ce/data #(String. ^bytes % "utf-8"))
-        event)
-      :cljs
-      (if (instance? js/Uint8Array data)
-        (update event :ce/data #(.decode (js/TextDecoder. "UTF-8") %))
-        event))))
+       (if (instance? (Class/forName "[B") data)
+         (update event :ce/data #(String. ^bytes % "utf-8"))
+         event)
+       :cljs
+       (if (instance? js/Uint8Array data)
+         (update event :ce/data #(.decode (js/TextDecoder. "UTF-8") %))
+         event))))
 
 (deftest structured-http->event-test
   (doseq [[name body-fn headers-fn] encodings]
