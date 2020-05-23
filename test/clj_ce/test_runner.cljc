@@ -1,7 +1,8 @@
 (ns clj-ce.test-runner
   (:require [clojure.test :as t]
-            [clj-ce.http-test]
-            [clj-ce.core-test]))
+            [clj-ce.core-test]
+            [clj-ce.json-test]
+            [clj-ce.http-test]))
 
 ; this file is entry point for cljs tests
 
@@ -12,5 +13,6 @@
 
 #?(:cljs
    (t/run-tests
-    'clj-ce.http-test
-    'clj-ce.core-test))
+     'clj-ce.core-test
+     'clj-ce.json-test
+     'clj-ce.http-test))
