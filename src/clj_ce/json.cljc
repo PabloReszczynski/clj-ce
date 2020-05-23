@@ -15,7 +15,7 @@
 
   {:doc/format :markdown}
   (:require [clj-ce.util :as util]
-            [clojure.set :refer [map-invert]]
+            [clojure.set]
             [clojure.string :refer [starts-with? index-of]]
             #?@(:clj ([clojure.data.json :as json]
                       [clojure.java.io :as jio]))
@@ -201,23 +201,6 @@
         (second)
         (or "utf-8"))))
 
-(defn- ser-data
-  [data event]
-  (let [{:ce/keys [data-content-type]} event
-        charset (charset-from-data-content-type data-content-type)]
-    (cond
-      (starts-with? data-content-type "text/")
-      data
-
-      (or (nil? data-content-type)
-          (starts-with? data-content-type "application/json"))
-      data
-
-      (starts-with? data-content-type "application/octet-stream")
-      (encode-base-64 (->binary data))
-
-      :else
-      data)))
 
 (defn- create#val->js-fields
   "Creates a function that returns a collection containing a single pair [js-field js-value],
@@ -234,16 +217,47 @@
        :time              (create#val->js-fields "time" ser-time),
        :spec-version      (create#val->js-fields "specversion"),
        :source            (create#val->js-fields "source" ser-uri),
-       :type              (create#val->js-fields "type")
-       :data              (create#val->js-fields "data" ser-data)})
+       :type              (create#val->js-fields "type")})
+
+(defn- data->js-fields-v1
+  [data & [clj-obj]]
+  (let [{:ce/keys [data-content-type]} clj-obj
+        charset (charset-from-data-content-type data-content-type)]
+    (cond
+      (starts-with? data-content-type "text/")
+      [["data" data]]
+      (or (nil? data-content-type)
+          (starts-with? data-content-type "application/json"))
+      [["data" data]]
+      (starts-with? data-content-type "application/octet-stream")
+      [["data_base64" (encode-base-64 (->binary data))]]
+      :else
+      [["data" data]])))
 
 (def ^:private clj-field->js-fields#v1
   (conj clj-field->js-fields#common
-        [:ce/data-schema (create#val->js-fields "dataschema" ser-uri)]))
+        [:ce/data-schema (create#val->js-fields "dataschema" ser-uri)]
+        [:ce/data data->js-fields-v1]))
+
+(defn- data->js-fields-v03
+  [data & [clj-obj]]
+  (let [{:ce/keys [data-content-type]} clj-obj]
+    (cond
+      (starts-with? data-content-type "text/")
+      [["data" data]]
+      (or (nil? data-content-type)
+          (starts-with? data-content-type "application/json"))
+      [["data" data]]
+      (starts-with? data-content-type "application/octet-stream")
+      [["data" (encode-base-64 (->binary data))]
+       [ "datacontentencoding" "base64"]]
+      :else
+      [["data" data]])))
 
 (def ^:private clj-field->js-fields#v03
   (conj clj-field->js-fields#common
-        [:ce/schema-url (create#val->js-fields "schemaurl" ser-uri)]))
+        [:ce/schema-url (create#val->js-fields "schemaurl" ser-uri)]
+        [:ce/data data->js-fields-v03]))
 
 (def ^:private clj-field->js-fields#by-version
   {"1.0" clj-field->js-fields#v1
