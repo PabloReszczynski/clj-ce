@@ -14,8 +14,10 @@
           (.toString other)))))
 
 (def ^:private ext-deser
-  {"anumber"  #(Long/valueOf ^String %)
-   "aboolean" #(Boolean/valueOf ^String %)
+  {"anumber"  #?(:clj  #(Long/valueOf ^String %)
+                 :cljs js/parseInt)
+   "aboolean" #?(:clj #(Boolean/valueOf ^String %)
+                 :cljs #(= "true" %))
    "astring"  identity})
 
 (def ^:private ext-ser
