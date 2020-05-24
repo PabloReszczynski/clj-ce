@@ -9,6 +9,10 @@ Clojure(Script) library designed to handle CloudEvents.
 
 TODO
 
+## Docs
+
+[Docs](https://matejvasek.github.io/clj-ce/index.html)
+
 ## License
 
 MIT License
