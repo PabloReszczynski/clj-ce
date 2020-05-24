@@ -145,6 +145,16 @@
 (defn binary-msg->event
   "Creates CloudEvent from the *http-msg*.
 
+  ~~~klipse
+  (binary-msg->event {:headers {\"ce-specversion\" \"0.3\"
+                                \"ce-id\"          \"1\"
+                                \"ce-type\"        \"mock.test\"
+                                \"ce-source\"      \"http://localhost/source\"
+                                \"ce-answer\"      \"42\"}
+                      :body    \"Hello World!\"}
+                      :extensions-fns {\"answer\" js/parseInt})
+  ~~~
+
   Options are key-value pairs, valid options are:
 
   *:extensions-fns*  `map[string,function]`. A map of functions used
@@ -168,8 +178,19 @@
       event)))
 
 (defn event->binary-msg
-  "Creates http message in binary mode from the *event*. Options are
-  key-value pairs, valid options are:
+  "Creates http message in binary mode from the *event*.
+
+  ~~~klipse
+  (event->binary-msg #:ce{:spec-version \"0.3\",
+                          :id           \"1\",
+                          :type         \"mock.test\",
+                          :source       (js/goog.Uri. \"http://localhost/source\"),
+                          :extensions   {:answer 42},
+                          :data         \"Hello World!\"}
+                     :extensions-fns {:answer #(.toString %)})
+  ~~~
+
+  Options are key-value pairs, valid options are:
 
   *:extensions-fns*  `map[keyword,function]`. A map of functions used to
   serialize extension fields to headers.
@@ -213,7 +234,18 @@
       ["application/octet-stream" nil])))
 
 (defn structured-msg->event
-  "Creates CloudEvent from http message in structured mode."
+  "Creates CloudEvent from http message in structured mode.
+
+  ~~~klipse
+  (structured-msg->event {:headers {\"content-type\" \"application/cloudevents+json\"}
+                          :body    \"{\\\"specversion\\\": \\\"0.3\\\",
+                                      \\\"id\\\": \\\"1\\\",
+                                      \\\"type\\\": \\\"mock.test\\\",
+                                      \\\"source\\\": \\\"http://localhost/source\\\"}\"}
+                         {\"json\" clj-ce.json/json->cloudevent})
+  ~~~
+
+  "
   {:doc/format :markdown}
   [http-msg deserializers]
   (let [{:keys [headers body]} http-msg
@@ -222,7 +254,23 @@
     (deserialize-fn body encoding)))
 
 (defn event->structured-msg
-  "Creates http message in structured mode from an event."
+  "Creates http message in structured mode from an event.
+
+  ~~~klipse
+  (event->structured-msg #:ce{:id                \"1\"
+                          :source            (js/goog.Uri. \"http://localhost/source\")
+                          :type              \"mock.test\"
+                          :spec-version      \"0.3\"
+                          :time              #inst \"2018-04-26T14:48:09+02:00\"
+                          :schema-url        (js/goog.Uri. \"http://localhost/schema\")
+                          :subject           \"sub\"
+                          :data-content-type \"application/json\"
+                          :data              {:message \"Hello!\"}}
+                       \"json\"
+                        clj-ce.json/cloudevent->json
+                       \"utf-8\")
+  ~~~
+  "
   {:doc/format :markdown}
   [event format-name serialize-fn charset]
   {:headers {"content-type" (str "application/cloudevents+" format-name "; charset=" charset)}
