@@ -3,11 +3,11 @@
   CloudEvents from/to http messages.
 
   **Http message** in this context is a map with `:headers` and `:body` keys.
-  (Not unlikely `ring` request/response).
-  The `http message` can be then used as http request or response.
+  (Not unlike `ring` request/response.)
+  The *http message* can be then used as http request or response.
 
   **CloudEvent** is represented by a map
-  where keys are namespaced keywords of shape `:ce/[field-name]`.
+  where keys are namespaced keywords of shape *:ce/[field-name]*.
 
   For instance
   ``` clojure
@@ -214,6 +214,7 @@
 
 (defn structured-msg->event
   "Creates CloudEvent from http message in structured mode."
+  {:doc/format :markdown}
   [http-msg deserializers]
   (let [{:keys [headers body]} http-msg
         [format encoding] (parse-content-type (headers "content-type"))
@@ -222,12 +223,14 @@
 
 (defn event->structured-msg
   "Creates http message in structured mode from an event."
+  {:doc/format :markdown}
   [event format-name serialize-fn charset]
   {:headers {"content-type" (str "application/cloudevents+" format-name "; charset=" charset)}
    :body    (serialize-fn event)})
 
 (defn msg->event
   "Creates CloudEvent from http message in either binary or structured mode."
+  {:doc/format :markdown}
   [http-msg serializers]
   (cond
     (binary-msg? http-msg) (binary-msg->event http-msg)
