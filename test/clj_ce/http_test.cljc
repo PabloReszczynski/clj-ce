@@ -13,18 +13,28 @@
        (= (.toString o)
           (.toString other)))))
 
+(def ^:private ext-deser
+  {"anumber"  #(Long/valueOf ^String %)
+   "aboolean" #(Boolean/valueOf ^String %)
+   "astring"  identity})
+
+(def ^:private ext-ser
+  {:anumber str
+   :aboolean str
+   :astring identity})
+
 (deftest binary-http->event-test
   (doseq [arguments bin-data/data]
     (let [{:keys [headers body event]} arguments
-          e (ce-http/binary-msg->event {:headers headers :body body})]
+          e (ce-http/binary-msg->event {:headers headers :body body} :extensions-fns ext-deser)]
       (is (= event e)))))
 
 (deftest event->binary-http&back-test
   (doseq [arguments bin-data/data]
     (let [{:keys [event]} arguments]
       (is (= event (-> event
-                       (ce-http/event->binary-msg)
-                       (ce-http/binary-msg->event)))))))
+                       (ce-http/event->binary-msg :extensions-fns ext-ser)
+                       (ce-http/binary-msg->event :extensions-fns ext-deser)))))))
 
 
 (deftest structured-http->event&back-test-utf8

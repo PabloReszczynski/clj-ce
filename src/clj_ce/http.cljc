@@ -123,7 +123,7 @@
 
 (defn- create-rf
   "Creates a reduce function that that reduces headers into a CloudEvent."
-  [version]
+  [version ext-deser-fns]
   (let [header->field&deser-fn (header->field&deser-fn-by-version version)]
     (fn [event [header-key header-value]]
       (cond
@@ -134,33 +134,55 @@
 
        ;; ce extension field
         (and (starts-with? header-key "ce-") (> (count header-key) 3))
-        (assoc-in event [:ce/extensions (keyword (subs header-key 3))] header-value)
+       (let [ext-field (subs header-key 3)
+             deser-fn (ext-deser-fns ext-field identity)]
+         (assoc-in event [:ce/extensions (keyword ext-field)] (deser-fn header-value)))
 
        ;; non ce header
         :else
         event))))
 
 (defn binary-msg->event
-  "Creates CloudEvent from http message in binary format."
-  [http-msg]
+  "Creates CloudEvent from the *http-msg*.
+
+  Options are key-value pairs, valid options are:
+
+  *:extensions-fns*  `map[string,function]`. A map of functions used
+  to deserialize extension fields from headers.
+
+  "
+  {:doc/format :markdown}
+  [http-msg & options]
   (let [{:keys [headers body]} http-msg
+        {:keys [extensions-fns]
+         :or   {extensions-fns {}}} options
         headers (->> headers
                      (map (fn [[k v]]
                             [(lower-case k) v]))
                      (into headers))
         version (headers "ce-specversion")
-        rf (create-rf version)
+        rf (create-rf version extensions-fns)
         event (reduce rf {} headers)]
     (if body
       (assoc event :ce/data body)
       event)))
 
 (defn event->binary-msg
-  "Creates http message in binary mode from an event."
-  [event]
-  (let [field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
+  "Creates http message in binary mode from the *event*. Options are
+  key-value pairs, valid options are:
+
+  *:extensions-fns*  `map[keyword,function]`. A map of functions used to
+  serialize extension fields to headers.
+
+  "
+  {:doc/format :markdown}
+  [event & options]
+  (let [{:keys [extensions-fns]
+         :or   {extensions-fns {}}} options
+        field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
         headers (->> (:ce/extensions event)
-                     (map (fn [[k v]] [(str "ce-" (name k)) v]))
+                     (map (fn [[k v]]
+                            [(str "ce-" (name k)) ((extensions-fns k identity) v)]))
                      (into {}))
         headers (->> (dissoc event :ce/extensions)
                      (keep (fn [[field-key field-value]]

@@ -54,7 +54,7 @@
                   :schema-url        (parse-uri "http://localhost/schema")
                   :subject           "sub"
                   :data-content-type "application/json"
-                  :extensions        {:astring "aaa", :aboolean "true", :anumber "10"}
+                  :extensions        {:astring "aaa", :aboolean true, :anumber 10}
                   :data              "{}"}}
 
    {:headers {"ce-specversion" "0.3"
@@ -145,7 +145,7 @@
                   :data-schema       (parse-uri "http://localhost/schema")
                   :subject           "sub"
                   :data-content-type "application/json"
-                  :extensions        {:astring "aaa", :aboolean "true", :anumber "10"}
+                  :extensions        {:astring "aaa", :aboolean true, :anumber 10}
                   :data              "{}"}}
 
    {:headers {"ce-specversion" "1.0"
