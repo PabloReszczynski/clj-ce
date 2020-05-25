@@ -225,8 +225,9 @@
   (let [{:ce/keys [data-content-type]} clj-obj
         charset (charset-from-data-content-type data-content-type)]
     (cond
-      (starts-with? data-content-type "text/")
-      [["data" data]]
+      (starts-with? data-content-type "text")
+      [["data" (#?(:clj slurp :cljs identity)
+                 (->text data "utf-8"))]]
       (or (nil? data-content-type)
           (starts-with? data-content-type "application/json"))
       [["data" data]]
@@ -244,8 +245,9 @@
   [data & [clj-obj]]
   (let [{:ce/keys [data-content-type]} clj-obj]
     (cond
-      (starts-with? data-content-type "text/")
-      [["data" data]]
+      (starts-with? data-content-type "text")
+      [["data" (#?(:clj slurp :cljs identity)
+                 (->text data "utf-8"))]]
       (or (nil? data-content-type)
           (starts-with? data-content-type "application/json"))
       [["data" data]]
