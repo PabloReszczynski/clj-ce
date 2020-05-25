@@ -20,12 +20,17 @@
                               "https://raw.githubusercontent.com/matejvasek/clj-ce/master/src/"
                               :klipse/require-statement
                               "(ns my.test
-                              (:require [clj-ce.http :as ce-http :refer [binary-msg->event
-                                                                         event->binary-msg
-                                                                         structured-msg->event
-                                                                         event->structured-msg]]
-                                        [clj-ce.json :as ce-json :refer [json->cloudevent
-                                                                         cloudevent->json]]))"}]]}
+                                  (:require [clj-ce.util :refer [parse-uri]]
+                                            [clj-ce.http :refer [binary-msg->event
+                                                                 event->binary-msg
+                                                                 structured-msg->event
+                                                                 event->structured-msg]]
+                                            [clj-ce.json :refer [json->cloudevent
+                                                                 cloudevent->json
+                                                                 BinaryData
+                                                                 ->binary
+                                                                 CharacterData
+                                                                 ->text]]))"}]]}
   :cljsbuild {:builds
               [{:id "test"
                 :source-paths ["src" "test"]
