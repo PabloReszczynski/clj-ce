@@ -7,7 +7,7 @@
   The *http message* can be then used as http request or response.
 
   **CloudEvent** is represented by a map
-  where keys are namespaced keywords of shape *:ce/[field-name]*.
+  where keys are namespaced keywords of shape *:ce/[attribute-name]*.
 
   For instance
   ``` clojure
@@ -42,7 +42,7 @@
 
 (def ^:private deser-uri parse-uri)
 
-(def ^:private field->header-common
+(def ^:private attribute->header-common
   #:ce{:id                "ce-id"
        :spec-version      "ce-specversion"
        :source            "ce-source"
@@ -51,61 +51,61 @@
        :data-content-type "content-type"
        :time              "ce-time"})
 
-(def ^:private field->header-v1
-  (conj field->header-common
+(def ^:private attribute->header-v1
+  (conj attribute->header-common
         [:ce/data-schema "ce-dataschema"]))
 
-(def ^:private field->header-v03
-  (conj field->header-common
+(def ^:private attribute->header-v03
+  (conj attribute->header-common
         [:ce/schema-url "ce-schemaurl"]))
 
-(def ^:private header->field-v1
-  (map-invert field->header-v1))
+(def ^:private header->attribute-v1
+  (map-invert attribute->header-v1))
 
-(def ^:private header->field-v03
-  (map-invert field->header-v03))
+(def ^:private header->attribute-v03
+  (map-invert attribute->header-v03))
 
-(def ^:private header->field-by-version
-  {"0.3" header->field-v03
-   "1.0" header->field-v1})
+(def ^:private header->attribute-by-version
+  {"0.3" header->attribute-v03
+   "1.0" header->attribute-v1})
 
-(def ^:private field->deser-fn
+(def ^:private attribute->deser-fn
   #:ce{:time        deser-time
        :source      deser-uri
        :data-schema deser-uri
        :schema-url  deser-uri})
 
-(defn- header->field&deser-fn-by-version
-  "Returns a function that maps http header to a pair [field, deser-fn],
-  where `field` is a field of CloudEvent (keyword) to which the http header is mapped to and
-  `deser-fn` is a function used to deserialize the header to the field."
+(defn- header->attribute&deser-fn-by-version
+  "Returns a function of type: (header:string -> [attribute:keyword, deser-fn:(string -> any)]),
+  where `attribute` is an attribute of CloudEvent) to which the http header is mapped to, and
+  `deser-fn` is a function used to deserialize the header to the attribute."
   [version]
   (fn [header]
-    (if-let [header->field (header->field-by-version version)]
-      (if (header->field header)
-        [(header->field header)
-         (field->deser-fn (header->field header) identity)]))))
+    (if-let [header->attribute (header->attribute-by-version version)]
+      (if (header->attribute header)
+        [(header->attribute header)
+         (attribute->deser-fn (header->attribute header) identity)]))))
 
-(def ^:private field->header-by-version
-  {"0.3" field->header-v03
-   "1.0" field->header-v1})
+(def ^:private attribute->header-by-version
+  {"0.3" attribute->header-v03
+   "1.0" attribute->header-v1})
 
-(def ^:private field->ser-fn
+(def ^:private attribute->ser-fn
   #:ce{:time        ser-time
        :source      ser-uri
        :data-schema ser-uri
        :schema-url  ser-uri})
 
-(defn- field->header&ser-fn-by-version
-  "Returns a function that maps CloudEvent field to pair [header, ser-fn],
-  where `header` is a name of a header to which the filed (keyword) is mapped to and
-  `ser-fn` is a function used to serialize the field to the header."
+(defn- attribute->header&ser-fn-by-version
+  "Returns a function of type: (attribute:keyword -> [header:string, ser-fn:(any -> string)]),
+  where `header` is a name of a header to which the attribute (keyword) is mapped to, and
+  `ser-fn` is a function used to serialize the attribute to the header."
   [version]
-  (fn [field]
-    (if-let [field->header (field->header-by-version version)]
-      (if (field->header field)
-        [(field->header field)
-         (field->ser-fn field identity)]))))
+  (fn [attribute]
+    (if-let [attribute->header (attribute->header-by-version version)]
+      (if (attribute->header attribute)
+        [(attribute->header attribute)
+         (attribute->ser-fn attribute identity)]))))
 
 (defn- structured-msg?
   [http-msg]
@@ -124,21 +124,21 @@
 (defn- create-rf
   "Creates a reduce function that that reduces headers into a CloudEvent."
   [version ext-deser-fns]
-  (let [header->field&deser-fn (header->field&deser-fn-by-version version)]
+  (let [header->attribute&deser-fn (header->attribute&deser-fn-by-version version)]
     (fn [event [header-key header-value]]
       (cond
-       ;; ce field
-        (header->field&deser-fn header-key)
-        (let [[field deser-fn] (header->field&deser-fn header-key)]
-          (assoc event field (deser-fn header-value)))
+        ;; ce attribute
+        (header->attribute&deser-fn header-key)
+        (let [[attribute deser-fn] (header->attribute&deser-fn header-key)]
+          (assoc event attribute (deser-fn header-value)))
 
-       ;; ce extension field
+        ;; ce extension attribute
         (and (starts-with? header-key "ce-") (> (count header-key) 3))
-       (let [ext-field (subs header-key 3)
-             deser-fn (ext-deser-fns ext-field identity)]
-         (assoc-in event [:ce/extensions (keyword ext-field)] (deser-fn header-value)))
+        (let [ext-attribute (subs header-key 3)
+              deser-fn (ext-deser-fns ext-attribute identity)]
+          (assoc-in event [:ce/extensions (keyword ext-attribute)] (deser-fn header-value)))
 
-       ;; non ce header
+        ;; non ce header
         :else
         event))))
 
@@ -158,7 +158,7 @@
   Options are key-value pairs, valid options are:
 
   *:extensions-fns*  `map[string,function]`. A map of functions used
-  to deserialize extension fields from headers.
+  to deserialize extension attributes from headers.
 
   "
   {:doc/format :markdown}
@@ -193,22 +193,22 @@
   Options are key-value pairs, valid options are:
 
   *:extensions-fns*  `map[keyword,function]`. A map of functions used to
-  serialize extension fields to headers.
+  serialize extension attributes to headers.
 
   "
   {:doc/format :markdown}
   [event & options]
   (let [{:keys [extensions-fns]
          :or   {extensions-fns {}}} options
-        field->header&ser-fn (field->header&ser-fn-by-version (:ce/spec-version event))
+        attribute->header&ser-fn (attribute->header&ser-fn-by-version (:ce/spec-version event))
         headers (->> (:ce/extensions event)
                      (map (fn [[k v]]
                             [(str "ce-" (name k)) ((extensions-fns k identity) v)]))
                      (into {}))
         headers (->> (dissoc event :ce/extensions)
-                     (keep (fn [[field-key field-value]]
-                             (if-let [[header-key ser-fn] (field->header&ser-fn field-key)]
-                               [header-key (ser-fn field-value)])))
+                     (keep (fn [[attribute-key attribute-value]]
+                             (if-let [[header-key ser-fn] (attribute->header&ser-fn attribute-key)]
+                               [header-key (ser-fn attribute-value)])))
                      (into headers))]
 
     {:headers headers

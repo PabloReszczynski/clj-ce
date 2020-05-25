@@ -77,7 +77,7 @@
 
     For ClojureScript this should return `js/Uint8Array`."))
 
-(def ^:private js-field->clj-field-common
+(def ^:private js-field->attribute-common
   {"id"              :ce/id
    "specversion"     :ce/spec-version
    "source"          :ce/source
@@ -88,23 +88,23 @@
    "data"            :ce/data
    "data_base64"     :ce/data})
 
-(def ^:private js-field->clj-field-v1
-  (conj js-field->clj-field-common
+(def ^:private js-field->attribute-v1
+  (conj js-field->attribute-common
         ["dataschema" :ce/data-schema]))
 
-(def ^:private js-field->clj-field-v03
-  (conj js-field->clj-field-common
+(def ^:private js-field->attribute-v03
+  (conj js-field->attribute-common
         ["schemaurl" :ce/schema-url]
         ["datacontentencoding" ::transient]))
 
-(def ^:private standard-fields-by-version
-  {"1.0" (into #{} (map (fn [[k v]] k)) js-field->clj-field-v1)
-   "0.3" (into #{} (map (fn [[k v]] k)) js-field->clj-field-v03)})
+(def ^:private standard-attributes-by-version
+  {"1.0" (into #{} (map (fn [[k v]] k)) js-field->attribute-v1)
+   "0.3" (into #{} (map (fn [[k v]] k)) js-field->attribute-v03)})
 
-(defn- create#standard-field?
+(defn- create#standard-attribute?
   [version]
-  (let [standard-fields (standard-fields-by-version version)]
-    (fn [[k _]] (boolean (standard-fields k)))))
+  (let [standard-attributes (standard-attributes-by-version version)]
+    (fn [[k _]] (boolean (standard-attributes k)))))
 
 (defn- deser-uri
   [js-field-value _]
@@ -125,24 +125,24 @@
      :cljs (b64/decodeStringToUint8Array s)))
 
 (defn- deser-data
-  [field-value js-obj]
+  [attribute-value js-obj]
   (let [dce (js-obj "datacontentencoding")]
     (cond
 
       (and (= dce "base64")
-           (string? field-value))
-      (decode-base-64 field-value)
+           (string? attribute-value))
+      (decode-base-64 attribute-value)
 
-      (string? field-value)
-      field-value
+      (string? attribute-value)
+      attribute-value
 
       :else
-      #?(:clj  (json/write-str field-value)
-         :cljs (js/JSON.stringify (clj->js field-value))))))
+      #?(:clj  (json/write-str attribute-value)
+         :cljs (js/JSON.stringify (clj->js attribute-value))))))
 
 (defn- deser-data-base-64
-  [field-value _]
-  (decode-base-64 field-value))
+  [attribute-value _]
+  (decode-base-64 attribute-value))
 
 (def ^:private js-field->deser-fn
   {"time"        deser-time
@@ -152,33 +152,32 @@
    "data_base64" deser-data-base-64
    "data"        deser-data})
 
-(def ^:private js-field->clj-field-by-version
-  {"1.0" js-field->clj-field-v1
-   "0.3" js-field->clj-field-v03})
+(def ^:private js-field->attribute-by-version
+  {"1.0" js-field->attribute-v1
+   "0.3" js-field->attribute-v03})
 
-(defn- create#js-field->clj-field
-  "Returns a function that accepts a pair [js-field js-value],
-  where `js-field` is a name (string) of a JSON field and
-  `js-value` is the value of the field.
-  The functions returns a pair [field, value],
-  where `field` is a name (keyword) of a CloudEvent and
-  `value` is the value of the field."
+(defn- create#js-field->attribute
+  "Returns a function of type: ([js-field:string, js-value:any] -> [attribute:keyword, value:any]),
+  where: `js-field` is a name of JSON field,
+         `js-value` is the value of the field,
+         `attribute` is an attribute of a CloudEvent, and
+         `value` is the value of the attribute."
   [js-obj]
-  (let [js-field->clj-field (js-field->clj-field-by-version (js-obj "specversion"))]
+  (let [js-field->attribute (js-field->attribute-by-version (js-obj "specversion"))]
     (fn [[js-field js-value]]
-      (let [clj-field (js-field->clj-field js-field)
+      (let [attribute (js-field->attribute js-field)
             deser-fn (js-field->deser-fn js-field (fn [x & _] x))]
-        (when (and clj-field
-                   (not= clj-field ::transient))
-          [clj-field (deser-fn js-value js-obj)])))))
+        (when (and attribute
+                   (not= attribute ::transient))
+          [attribute (deser-fn js-value js-obj)])))))
 
 (defn- ser-uri
-  [clj-field-value _]
-  (str clj-field-value))
+  [attribute-value _]
+  (str attribute-value))
 
 (defn- ser-time
-  [clj-field-value _]
-  (util/ser-time clj-field-value))
+  [attribute-value _]
+  (util/ser-time attribute-value))
 
 #?(:clj
    (defn- is->base64-str [is]
@@ -203,14 +202,16 @@
 
 
 (defn- create#val->js-fields
-  "Creates a function that returns a collection containing a single pair [js-field js-value],
-  where `js-field` is name of a JSON field and `js-value` is value of the field."
+  "Helper function that creates a function of type: (attr-value:any -> [[js-field:string, js-value:any]]).
+
+  The function returns a collection containing single pair [js-field js-value],
+  where `js-field` is name of a JSON attribute and `js-value` is value of the attribute."
   [js-field & [ser-fn]]
   (let [ser-fn (or ser-fn (fn [x & _] x))]
     (fn [clj-value & [clj-obj]]
       [[js-field (ser-fn clj-value clj-obj)]])))
 
-(def ^:private clj-field->js-fields#common
+(def ^:private attribute->js-fields#common
   #:ce{:data-content-type (create#val->js-fields "datacontenttype"),
        :id                (create#val->js-fields "id"),
        :subject           (create#val->js-fields "subject"),
@@ -234,8 +235,8 @@
       :else
       [["data" data]])))
 
-(def ^:private clj-field->js-fields#v1
-  (conj clj-field->js-fields#common
+(def ^:private attribute->js-fields#v1
+  (conj attribute->js-fields#common
         [:ce/data-schema (create#val->js-fields "dataschema" ser-uri)]
         [:ce/data data->js-fields-v1]))
 
@@ -250,29 +251,29 @@
       [["data" data]]
       (starts-with? data-content-type "application/octet-stream")
       [["data" (encode-base-64 (->binary data))]
-       [ "datacontentencoding" "base64"]]
+       ["datacontentencoding" "base64"]]
       :else
       [["data" data]])))
 
-(def ^:private clj-field->js-fields#v03
-  (conj clj-field->js-fields#common
+(def ^:private attribute->js-fields#v03
+  (conj attribute->js-fields#common
         [:ce/schema-url (create#val->js-fields "schemaurl" ser-uri)]
         [:ce/data data->js-fields-v03]))
 
-(def ^:private clj-field->js-fields#by-version
-  {"1.0" clj-field->js-fields#v1
-   "0.3" clj-field->js-fields#v03})
+(def ^:private attribute->js-fields#by-version
+  {"1.0" attribute->js-fields#v1
+   "0.3" attribute->js-fields#v03})
 
-(defn- create#clj-field->js-fields
-  "Creates a function that accepts a pair [clj-field clj-value],
-  where `clj-field` is a name (keyword) of a CloudEvent field and
-  `clj-value` is the value of the field.
-  The function returns a sequence of pairs [js-field js-value],
-  where `js-field` is name of a JSON field and `js-value` is value of that field."
+(defn- create#attribute->js-fields
+  "Creates a function of type: ([attribute:keyword, attr-val:any] -> [[js-field:string, js-value:any]]),
+  where: `attribute` is an attribute of a CloudEvent,
+         `attr-val` is a value of the attribute,
+         `js-field` is a name of a JSON field, and
+         `js-value` is a value of the field."
   [event]
-  (let [clj-field->js-fields (clj-field->js-fields#by-version (:ce/spec-version event))]
-    (fn [[clj-field clj-value]]
-      (when-let [val->js-fields (clj-field->js-fields clj-field)]
+  (let [attribute->js-fields (attribute->js-fields#by-version (:ce/spec-version event))]
+    (fn [[attribute clj-value]]
+      (when-let [val->js-fields (attribute->js-fields attribute)]
         (val->js-fields clj-value event)))))
 
 (defn- data->text
@@ -295,15 +296,15 @@
   [data & [charset]]
   {:pre [(satisfies? CharacterData data) (or (nil? charset) (string? charset))]}
   (let [js-obj (data->obj data charset)
-        standard-field? (create#standard-field? (js-obj "specversion"))
-        {fields     true
-         extensions false} (group-by standard-field? js-obj)
-        js-field->clj-field (create#js-field->clj-field js-obj)
+        standard-attribute? (create#standard-attribute? (js-obj "specversion"))
+        {attributes true
+         extensions false} (group-by standard-attribute? js-obj)
+        js-field->attribute (create#js-field->attribute js-obj)
         extensions (into {} (map (fn [[k v]] [(keyword k) v])) extensions)
-        fields (into {} (map js-field->clj-field) fields)]
+        attributes (into {} (map js-field->attribute) attributes)]
     (if (not (empty? extensions))
-      (assoc fields :ce/extensions extensions)
-      fields)))
+      (assoc attributes :ce/extensions extensions)
+      attributes)))
 
 #?(:clj
    (defn- write-json
@@ -325,10 +326,10 @@
   (let [{:keys [charset]
          :or   {charset "utf-8"}} options
         extensions (into {} (map (fn [[k v]] [(name k) v])) (:ce/extensions event))
-        fields (into extensions (mapcat (create#clj-field->js-fields event)) event)]
+        attributes (into extensions (mapcat (create#attribute->js-fields event)) event)]
     (#?(:clj  #(write-json % charset)
         :cljs #(js/JSON.stringify (clj->js %)))
-      fields)))
+      attributes)))
 
 #?(:clj
    (extend-protocol CharacterData
