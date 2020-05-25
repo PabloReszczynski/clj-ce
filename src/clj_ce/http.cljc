@@ -144,6 +144,10 @@
 
 (defn binary-msg->event
   "Creates CloudEvent from the *http-msg*.
+  Options are key-value pairs, valid options are:
+
+  *:extensions-fns*  `map[string,function]`. A map of functions used
+  to deserialize extension attributes from headers.
 
   ~~~klipse
   (binary-msg->event {:headers {\"ce-specversion\" \"0.3\"
@@ -154,11 +158,6 @@
                       :body    \"Hello World!\"}
                       :extensions-fns {\"answer\" js/parseInt})
   ~~~
-
-  Options are key-value pairs, valid options are:
-
-  *:extensions-fns*  `map[string,function]`. A map of functions used
-  to deserialize extension attributes from headers.
 
   "
   {:doc/format :markdown}
@@ -179,6 +178,10 @@
 
 (defn event->binary-msg
   "Creates http message in binary mode from the *event*.
+  Options are key-value pairs, valid options are:
+
+  *:extensions-fns*  `map[keyword,function]`. A map of functions used to
+  serialize extension attributes to headers.
 
   ~~~klipse
   (event->binary-msg #:ce{:spec-version \"0.3\",
@@ -189,11 +192,6 @@
                           :data         \"Hello World!\"}
                      :extensions-fns {:answer #(.toString %)})
   ~~~
-
-  Options are key-value pairs, valid options are:
-
-  *:extensions-fns*  `map[keyword,function]`. A map of functions used to
-  serialize extension attributes to headers.
 
   "
   {:doc/format :markdown}
